@@ -154,7 +154,7 @@ export class GeminiGameService {
       // Generate response using the provider
       const response = await this.provider.generateChat(chatMessages);
       
-      // Add AI response to history
+      // Add AI response to history (including system message)
       const newChatHistory: AIMessage[] = [
         { role: 'system' as const, content: systemPrompt },
         ...updatedHistory,
