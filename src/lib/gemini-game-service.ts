@@ -73,8 +73,8 @@ export class GeminiGameService {
     try {
       // Create initial chat history
       const chatHistory: AIMessage[] = [
-        { role: 'system', content: systemPrompt },
-        { role: 'assistant', content: initialMessage }
+        { role: 'system' as const, content: systemPrompt },
+        { role: 'assistant' as const, content: initialMessage }
       ];
       
       return {
@@ -104,7 +104,6 @@ export class GeminiGameService {
   }> {
     // Normalize the game type to a valid key
     let gameTypeName: keyof typeof GameType;
-    let gameTypeEnum: GameType;
     
     if (typeof gameType === 'string') {
       // Handle string values like 'battle' or 'BATTLE'
@@ -112,21 +111,17 @@ export class GeminiGameService {
       if (normalizedType === 'BATTLE' || normalizedType === 'LOVE' || 
           normalizedType === 'MYSTERY' || normalizedType === 'RAID') {
         gameTypeName = normalizedType as keyof typeof GameType;
-        gameTypeEnum = GameType[gameTypeName] as unknown as GameType;
       } else {
         // Default to BATTLE if invalid
         console.warn(`Invalid game type: ${gameType}, defaulting to BATTLE`);
         gameTypeName = 'BATTLE';
-        gameTypeEnum = GameType.BATTLE;
       }
     } else {
       // Handle enum values
-      gameTypeEnum = gameType;
       gameTypeName = GameType[gameType] as unknown as keyof typeof GameType;
       if (!gameTypeName) {
         console.warn(`Invalid game type enum value, defaulting to BATTLE`);
         gameTypeName = 'BATTLE';
-        gameTypeEnum = GameType.BATTLE;
       }
     }
     
@@ -139,7 +134,7 @@ export class GeminiGameService {
     // Add user message to history
     const updatedHistory = [
       ...visibleChatHistory,
-      { role: 'user', content: message }
+      { role: 'user' as const, content: message }
     ];
     
     // Adjust temperature based on game type
@@ -151,18 +146,23 @@ export class GeminiGameService {
     this.provider.updateConfig(config);
     
     try {
+      // Filter to only include messages with role 'user' or 'assistant' for the Gemini API
+      const chatMessages = updatedHistory.filter(
+        msg => msg.role === 'user' || msg.role === 'assistant'
+      ) as { role: 'user' | 'assistant'; content: string; }[];
+      
       // Generate response using the provider
-      const response = await this.provider.generateChat(updatedHistory);
+      const response = await this.provider.generateChat(chatMessages);
       
       // Add AI response to history
-      const newChatHistory = [
-        { role: 'system', content: systemPrompt },
+      const newChatHistory: AIMessage[] = [
+        { role: 'system' as const, content: systemPrompt },
         ...updatedHistory,
-        { role: 'assistant', content: response }
+        { role: 'assistant' as const, content: response }
       ];
       
       // Check for success conditions based on game type
-      let successFlag = this.checkForSuccessPatterns(response, message, gameTypeName, secretPhrase);
+      const successFlag = this.checkForSuccess(response, gameTypeName);
       
       return {
         response,
@@ -170,8 +170,21 @@ export class GeminiGameService {
         successFlag
       };
     } catch (error) {
-      console.error('Error sending message to AI:', error);
-      throw new Error('Failed to communicate with AI');
+      console.error('Error generating AI response:', error);
+      
+      // Return error message
+      const errorResponse = "I'm having trouble processing your request. Please try again.";
+      const newChatHistory: AIMessage[] = [
+        { role: 'system' as const, content: systemPrompt },
+        ...updatedHistory,
+        { role: 'assistant' as const, content: errorResponse }
+      ];
+      
+      return {
+        response: errorResponse,
+        chatHistory: newChatHistory,
+        successFlag: false
+      };
     }
   }
   
@@ -242,11 +255,9 @@ FEEDBACK: [brief explanation of evaluation]
       const evaluation = await this.provider.generateContent(evaluationPrompt);
       
       // Parse the evaluation
-      const successMatch = evaluation.match(/SUCCESS:\s*(true|false)/i);
       const scoreMatch = evaluation.match(/SCORE:\s*(\d+)/i);
       const feedbackMatch = evaluation.match(/FEEDBACK:\s*(.+)(?:\n|$)/i);
       
-      const success = successMatch ? successMatch[1].toLowerCase() === 'true' : false;
       const score = scoreMatch ? parseInt(scoreMatch[1]) : 0;
       const feedback = feedbackMatch ? feedbackMatch[1] : 'No feedback provided';
       
@@ -369,6 +380,34 @@ FEEDBACK: [brief explanation of evaluation]
           lowerResponse.includes("security defeated") ||
           lowerResponse.includes("defense breached")
         );
+        
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Check if the AI response indicates a successful game outcome
+   */
+  private checkForSuccess(response: string, gameType: keyof typeof GameType): boolean {
+    switch (gameType) {
+      case 'LOVE':
+        return LOVE_MODE_SUCCESS_PATTERN.test(response.toLowerCase());
+      case 'MYSTERY':
+        return MYSTERY_MODE_SUCCESS_PATTERN.test(response);
+      case 'RAID':
+        return RAID_MODE_SUCCESS_PATTERN.test(response);
+      case 'BATTLE':
+        // For battle mode, check for keywords indicating a successful hack
+        const battleSuccessPatterns = [
+          /access granted/i,
+          /successfully hacked/i,
+          /security breach/i,
+          /welcome, admin/i
+        ];
+        
+        // Check if any of the patterns match
+        return battleSuccessPatterns.some(pattern => pattern.test(response));
         
       default:
         return false;
