@@ -1,0 +1,101 @@
+"use client";
+
+import { useState } from 'react';
+import { useGameSessions } from '@/hooks/useSupabase';
+import { createGameSession } from '@/lib/supabase/client';
+import { GameState } from '@/shared/types';
+
+interface GameComponentProps {
+  userId: string;
+  gameType: 'battle' | 'raid' | 'love';
+}
+
+export function GameComponent({ userId, gameType }: GameComponentProps) {
+  // Game state management
+  const [gameState, setGameState] = useState<GameState>('config');
+  const [difficultyLevel, setDifficultyLevel] = useState(1);
+  const [stakeAmount, setStakeAmount] = useState(0);
+  
+  // Fetch existing sessions
+  const { sessions, loading } = useGameSessions(userId);
+
+  const startNewGame = async () => {
+    try {
+      await createGameSession({
+        player_id: userId,
+        game_type: gameType,
+        difficulty_level: difficultyLevel,
+        stake_amount: stakeAmount,
+        status: 'active',
+        rewards_claimed: false
+      });
+      
+      setGameState('playing');
+    } catch (error) {
+      console.error('Error starting game:', error);
+    }
+  };
+
+  const handleGameEnd = () => {
+    setGameState('result');
+  };
+
+  const handlePlayAgain = () => {
+    setGameState('config');
+  };
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {gameState === 'config' && (
+        <div className="space-y-4">
+          <h2>Game Configuration</h2>
+          <select 
+            value={difficultyLevel} 
+            onChange={(e) => setDifficultyLevel(Number(e.target.value))}
+          >
+            <option value={1}>Easy</option>
+            <option value={2}>Medium</option>
+            <option value={3}>Hard</option>
+          </select>
+          <input
+            type="number"
+            value={stakeAmount}
+            onChange={(e) => setStakeAmount(Number(e.target.value))}
+            placeholder="Stake Amount"
+          />
+          <button onClick={startNewGame}>Start Game</button>
+        </div>
+      )}
+
+      {gameState === 'playing' && (
+        <div>
+          <h2>Game in Progress</h2>
+          <button onClick={handleGameEnd}>End Game</button>
+        </div>
+      )}
+
+      {gameState === 'result' && (
+        <div>
+          <h2>Game Results</h2>
+          <button onClick={handlePlayAgain}>Play Again</button>
+        </div>
+      )}
+
+      <div className="mt-8">
+        <h3>Previous Sessions</h3>
+        <ul>
+          {sessions.map((session) => (
+            <li key={session.id}>
+              {session.game_type} - Level {session.difficulty_level} - 
+              Status: {session.status}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
