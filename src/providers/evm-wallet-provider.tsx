@@ -5,8 +5,8 @@ import { evmWallet } from "@/config/evm-wallet";
 import { chainSelector } from "@/config/chain-selector";
 import { toast } from "sonner";
 // Import the ABI JSON files
-import baultroFinalAbi from "@/abis/BaultroFinal.json";
 import baultroGamesAbi from "@/abis/BaultroGames.json";
+import baultroPredictionMarketAbi from "@/abis/BaultroPredictionMarket.json";
 import type { Abi } from "viem";
 
 // Define context interface
@@ -225,15 +225,18 @@ export function EVMWalletProvider({ children }: { children: React.ReactNode }) {
 
   // Helper function to get contract ABI
   const getContractAbi = (contractName: string): Abi => {
-    // Return the appropriate ABI based on the contract name
-    switch (contractName) {
-      case "predictionMarket":
-        return baultroFinalAbi.abi as unknown as Abi;
-      case "gameModesContract":
-        return baultroGamesAbi.abi as unknown as Abi;
+    switch (contractName.toLowerCase()) {
+      case "predictionmarket":
+        return baultroPredictionMarketAbi.abi as Abi;
+      case "gamemodes":
+        return baultroGamesAbi.abi as Abi;
+      case "baultropredictionmarket":
+        return baultroPredictionMarketAbi.abi as Abi;
+      case "baultrogames":
+        return baultroGamesAbi.abi as Abi;
       default:
-        // If contractName starts with 0x, it's likely an address - use a default ABI
-        return baultroFinalAbi.abi as unknown as Abi;
+        console.warn(`Unknown contract name: ${contractName}, using prediction market ABI`);
+        return baultroPredictionMarketAbi.abi as Abi;
     }
   };
 

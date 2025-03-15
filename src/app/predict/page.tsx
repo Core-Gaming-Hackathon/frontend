@@ -1,11 +1,9 @@
-import { ComingSoon } from "@/components/coming-soon";
+"use client";
 
+// Import the enhanced page component
+import EnhancedPredictionsPage from "./enhanced-page";
+
+// Export the enhanced page as the default export
 export default function PredictionsPage() {
-  return (
-    <ComingSoon
-      title="Predictions Coming Soon"
-      description="Get ready to predict and earn! Our prediction markets feature is under development. Soon you'll be able to stake tokens on various outcomes and earn rewards for accurate predictions."
-      imagePath="/site/pred.png"
-    />
-  );
-} 
+  return <EnhancedPredictionsPage />;
+}

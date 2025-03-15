@@ -1,7 +1,7 @@
 {
   "_format": "hh-sol-artifact-1",
-  "contractName": "BaultroGames",
-  "sourceName": "contracts/BaultroGames.sol",
+  "contractName": "BaultroPredictionMarket",
+  "sourceName": "contracts/BaultroPredictionMarket.sol",
   "abi": [
     {
       "inputs": [
@@ -25,29 +25,29 @@
         {
           "indexed": true,
           "internalType": "uint64",
-          "name": "battleId",
+          "name": "predictionId",
           "type": "uint64"
         },
         {
           "indexed": true,
           "internalType": "address",
-          "name": "player",
+          "name": "bettor",
           "type": "address"
         },
         {
           "indexed": false,
-          "internalType": "uint256",
-          "name": "stake",
-          "type": "uint256"
+          "internalType": "uint8",
+          "name": "optionId",
+          "type": "uint8"
         },
         {
           "indexed": false,
-          "internalType": "uint16",
-          "name": "difficulty",
-          "type": "uint16"
+          "internalType": "uint256",
+          "name": "amount",
+          "type": "uint256"
         }
       ],
-      "name": "BattleCreated",
+      "name": "BetPlaced",
       "type": "event"
     },
     {
@@ -56,29 +56,54 @@
         {
           "indexed": true,
           "internalType": "uint64",
-          "name": "battleId",
+          "name": "predictionId",
           "type": "uint64"
         },
         {
           "indexed": true,
           "internalType": "address",
-          "name": "player",
+          "name": "bettor",
           "type": "address"
         },
         {
           "indexed": false,
-          "internalType": "bool",
-          "name": "success",
-          "type": "bool"
+          "internalType": "uint8",
+          "name": "optionId",
+          "type": "uint8"
         },
         {
           "indexed": false,
           "internalType": "uint256",
-          "name": "reward",
+          "name": "amount",
           "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "sourceChain",
+          "type": "string"
+        },
+        {
+          "indexed": false,
+          "internalType": "string",
+          "name": "txHash",
+          "type": "string"
         }
       ],
-      "name": "BattleResolved",
+      "name": "CrossChainBetRecorded",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "intentsContract",
+          "type": "address"
+        }
+      ],
+      "name": "IntegrationsUpdated",
       "type": "event"
     },
     {
@@ -87,38 +112,7 @@
         {
           "indexed": true,
           "internalType": "uint64",
-          "name": "matchId",
-          "type": "uint64"
-        },
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "creator",
-          "type": "address"
-        },
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "opponent",
-          "type": "address"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "stake",
-          "type": "uint256"
-        }
-      ],
-      "name": "MatchAccepted",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "uint64",
-          "name": "matchId",
+          "name": "predictionId",
           "type": "uint64"
         },
         {
@@ -129,68 +123,18 @@
         },
         {
           "indexed": false,
-          "internalType": "uint256",
-          "name": "stake",
-          "type": "uint256"
-        }
-      ],
-      "name": "MatchCreated",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "uint64",
-          "name": "matchId",
-          "type": "uint64"
-        },
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "winner",
-          "type": "address"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint256",
-          "name": "reward",
-          "type": "uint256"
-        }
-      ],
-      "name": "MatchResolved",
-      "type": "event"
-    },
-    {
-      "anonymous": false,
-      "inputs": [
-        {
-          "indexed": true,
-          "internalType": "uint64",
-          "name": "raidId",
-          "type": "uint64"
-        },
-        {
-          "indexed": true,
-          "internalType": "address",
-          "name": "creator",
-          "type": "address"
+          "internalType": "string",
+          "name": "title",
+          "type": "string"
         },
         {
           "indexed": false,
           "internalType": "uint256",
           "name": "stake",
           "type": "uint256"
-        },
-        {
-          "indexed": false,
-          "internalType": "uint16",
-          "name": "difficulty",
-          "type": "uint16"
         }
       ],
-      "name": "RaidCreated",
+      "name": "PredictionCreated",
       "type": "event"
     },
     {
@@ -199,167 +143,83 @@
         {
           "indexed": true,
           "internalType": "uint64",
-          "name": "raidId",
+          "name": "predictionId",
+          "type": "uint64"
+        },
+        {
+          "indexed": false,
+          "internalType": "int8",
+          "name": "winningOption",
+          "type": "int8"
+        }
+      ],
+      "name": "PredictionResolved",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint64",
+          "name": "predictionId",
           "type": "uint64"
         },
         {
           "indexed": true,
           "internalType": "address",
-          "name": "player",
+          "name": "bettor",
           "type": "address"
         },
         {
           "indexed": false,
-          "internalType": "bool",
-          "name": "success",
-          "type": "bool"
-        },
-        {
-          "indexed": false,
           "internalType": "uint256",
-          "name": "reward",
+          "name": "amount",
           "type": "uint256"
         }
       ],
-      "name": "RaidParticipated",
+      "name": "WinningsClaimed",
       "type": "event"
     },
     {
       "inputs": [
         {
-          "internalType": "uint64",
-          "name": "matchId",
-          "type": "uint64"
-        }
-      ],
-      "name": "acceptMatch",
-      "outputs": [
-        {
-          "internalType": "bool",
+          "internalType": "bytes32",
           "name": "",
-          "type": "bool"
+          "type": "bytes32"
         }
       ],
-      "stateMutability": "payable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "uint16",
-          "name": "difficulty",
-          "type": "uint16"
-        }
-      ],
-      "name": "createBattle",
+      "name": "bets",
       "outputs": [
         {
           "internalType": "uint64",
-          "name": "",
+          "name": "predictionId",
           "type": "uint64"
-        }
-      ],
-      "stateMutability": "payable",
-      "type": "function"
-    },
-    {
-      "inputs": [],
-      "name": "createMatch",
-      "outputs": [
+        },
         {
-          "internalType": "uint64",
-          "name": "",
-          "type": "uint64"
-        }
-      ],
-      "stateMutability": "payable",
-      "type": "function"
-    },
-    {
-      "inputs": [
+          "internalType": "address",
+          "name": "bettor",
+          "type": "address"
+        },
         {
-          "internalType": "uint16",
-          "name": "difficulty",
-          "type": "uint16"
+          "internalType": "uint8",
+          "name": "optionId",
+          "type": "uint8"
         },
         {
           "internalType": "uint256",
-          "name": "entryFee",
+          "name": "amount",
           "type": "uint256"
-        }
-      ],
-      "name": "createRaid",
-      "outputs": [
+        },
         {
           "internalType": "uint64",
-          "name": "",
+          "name": "createdAt",
           "type": "uint64"
-        }
-      ],
-      "stateMutability": "payable",
-      "type": "function"
-    },
-    {
-      "inputs": [
+        },
         {
-          "internalType": "uint64",
-          "name": "battleId",
-          "type": "uint64"
-        }
-      ],
-      "name": "getBattle",
-      "outputs": [
-        {
-          "components": [
-            {
-              "internalType": "uint64",
-              "name": "id",
-              "type": "uint64"
-            },
-            {
-              "internalType": "address",
-              "name": "player",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "stake",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint16",
-              "name": "difficulty",
-              "type": "uint16"
-            },
-            {
-              "internalType": "bool",
-              "name": "resolved",
-              "type": "bool"
-            },
-            {
-              "internalType": "bool",
-              "name": "success",
-              "type": "bool"
-            },
-            {
-              "internalType": "uint256",
-              "name": "reward",
-              "type": "uint256"
-            },
-            {
-              "internalType": "uint64",
-              "name": "createdAt",
-              "type": "uint64"
-            },
-            {
-              "internalType": "uint64",
-              "name": "resolvedAt",
-              "type": "uint64"
-            }
-          ],
-          "internalType": "struct BaultroGames.Battle",
-          "name": "",
-          "type": "tuple"
+          "internalType": "bool",
+          "name": "claimed",
+          "type": "bool"
         }
       ],
       "stateMutability": "view",
@@ -369,43 +229,86 @@
       "inputs": [
         {
           "internalType": "uint64",
-          "name": "matchId",
+          "name": "predictionId",
           "type": "uint64"
         }
       ],
-      "name": "getMatch",
+      "name": "claimWinnings",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "string",
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "internalType": "string[]",
+          "name": "options",
+          "type": "string[]"
+        }
+      ],
+      "name": "createPrediction",
+      "outputs": [
+        {
+          "internalType": "uint64",
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint64",
+          "name": "predictionId",
+          "type": "uint64"
+        },
+        {
+          "internalType": "address",
+          "name": "bettor",
+          "type": "address"
+        }
+      ],
+      "name": "getBet",
       "outputs": [
         {
           "components": [
             {
               "internalType": "uint64",
-              "name": "id",
+              "name": "predictionId",
               "type": "uint64"
             },
             {
               "internalType": "address",
-              "name": "creator",
+              "name": "bettor",
               "type": "address"
             },
             {
-              "internalType": "address",
-              "name": "opponent",
-              "type": "address"
-            },
-            {
-              "internalType": "uint256",
-              "name": "stake",
-              "type": "uint256"
-            },
-            {
-              "internalType": "enum BaultroGames.MatchStatus",
-              "name": "status",
+              "internalType": "uint8",
+              "name": "optionId",
               "type": "uint8"
             },
             {
-              "internalType": "address",
-              "name": "winner",
-              "type": "address"
+              "internalType": "uint256",
+              "name": "amount",
+              "type": "uint256"
             },
             {
               "internalType": "uint64",
@@ -413,17 +316,12 @@
               "type": "uint64"
             },
             {
-              "internalType": "uint64",
-              "name": "acceptedAt",
-              "type": "uint64"
-            },
-            {
-              "internalType": "uint64",
-              "name": "resolvedAt",
-              "type": "uint64"
+              "internalType": "bool",
+              "name": "claimed",
+              "type": "bool"
             }
           ],
-          "internalType": "struct BaultroGames.Match",
+          "internalType": "struct BaultroPredictionMarket.Bet",
           "name": "",
           "type": "tuple"
         }
@@ -448,11 +346,11 @@
       "inputs": [
         {
           "internalType": "uint64",
-          "name": "raidId",
+          "name": "predictionId",
           "type": "uint64"
         }
       ],
-      "name": "getRaid",
+      "name": "getPrediction",
       "outputs": [
         {
           "components": [
@@ -467,19 +365,34 @@
               "type": "address"
             },
             {
+              "internalType": "string",
+              "name": "title",
+              "type": "string"
+            },
+            {
+              "internalType": "string",
+              "name": "description",
+              "type": "string"
+            },
+            {
+              "internalType": "string[]",
+              "name": "options",
+              "type": "string[]"
+            },
+            {
               "internalType": "uint256",
               "name": "stake",
               "type": "uint256"
             },
             {
               "internalType": "uint256",
-              "name": "entryFee",
+              "name": "totalBets",
               "type": "uint256"
             },
             {
-              "internalType": "uint16",
-              "name": "difficulty",
-              "type": "uint16"
+              "internalType": "int8",
+              "name": "resolvedOption",
+              "type": "int8"
             },
             {
               "internalType": "uint64",
@@ -487,12 +400,12 @@
               "type": "uint64"
             },
             {
-              "internalType": "bool",
-              "name": "active",
-              "type": "bool"
+              "internalType": "uint64",
+              "name": "resolvedAt",
+              "type": "uint64"
             }
           ],
-          "internalType": "struct BaultroGames.Raid",
+          "internalType": "struct BaultroPredictionMarket.Prediction",
           "name": "",
           "type": "tuple"
         }
@@ -504,48 +417,125 @@
       "inputs": [
         {
           "internalType": "uint64",
-          "name": "raidId",
+          "name": "fromIndex",
           "type": "uint64"
         },
         {
-          "internalType": "address",
-          "name": "player",
-          "type": "address"
+          "internalType": "uint64",
+          "name": "limit",
+          "type": "uint64"
         }
       ],
-      "name": "getRaidParticipation",
+      "name": "getPredictions",
       "outputs": [
         {
           "components": [
             {
               "internalType": "uint64",
-              "name": "raidId",
+              "name": "id",
               "type": "uint64"
             },
             {
               "internalType": "address",
-              "name": "player",
+              "name": "creator",
               "type": "address"
             },
             {
-              "internalType": "bool",
-              "name": "success",
-              "type": "bool"
+              "internalType": "string",
+              "name": "title",
+              "type": "string"
+            },
+            {
+              "internalType": "string",
+              "name": "description",
+              "type": "string"
+            },
+            {
+              "internalType": "string[]",
+              "name": "options",
+              "type": "string[]"
             },
             {
               "internalType": "uint256",
-              "name": "reward",
+              "name": "stake",
               "type": "uint256"
             },
             {
+              "internalType": "uint256",
+              "name": "totalBets",
+              "type": "uint256"
+            },
+            {
+              "internalType": "int8",
+              "name": "resolvedOption",
+              "type": "int8"
+            },
+            {
               "internalType": "uint64",
-              "name": "participatedAt",
+              "name": "createdAt",
+              "type": "uint64"
+            },
+            {
+              "internalType": "uint64",
+              "name": "resolvedAt",
               "type": "uint64"
             }
           ],
-          "internalType": "struct BaultroGames.RaidParticipation",
+          "internalType": "struct BaultroPredictionMarket.Prediction[]",
           "name": "",
-          "type": "tuple"
+          "type": "tuple[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getPredictionsCount",
+      "outputs": [
+        {
+          "internalType": "uint64",
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "getTotalStake",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "intentsContract",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
         }
       ],
       "stateMutability": "view",
@@ -555,11 +545,16 @@
       "inputs": [
         {
           "internalType": "uint64",
-          "name": "raidId",
+          "name": "predictionId",
           "type": "uint64"
+        },
+        {
+          "internalType": "uint8",
+          "name": "optionId",
+          "type": "uint8"
         }
       ],
-      "name": "participateInRaid",
+      "name": "placeBet",
       "outputs": [
         {
           "internalType": "bool",
@@ -571,19 +566,104 @@
       "type": "function"
     },
     {
+      "inputs": [],
+      "name": "platformFee",
+      "outputs": [
+        {
+          "internalType": "uint8",
+          "name": "",
+          "type": "uint8"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
       "inputs": [
         {
           "internalType": "uint64",
-          "name": "battleId",
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "name": "predictions",
+      "outputs": [
+        {
+          "internalType": "uint64",
+          "name": "id",
           "type": "uint64"
         },
         {
-          "internalType": "bool",
-          "name": "success",
-          "type": "bool"
+          "internalType": "address",
+          "name": "creator",
+          "type": "address"
+        },
+        {
+          "internalType": "string",
+          "name": "title",
+          "type": "string"
+        },
+        {
+          "internalType": "string",
+          "name": "description",
+          "type": "string"
+        },
+        {
+          "internalType": "uint256",
+          "name": "stake",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "totalBets",
+          "type": "uint256"
+        },
+        {
+          "internalType": "int8",
+          "name": "resolvedOption",
+          "type": "int8"
+        },
+        {
+          "internalType": "uint64",
+          "name": "createdAt",
+          "type": "uint64"
+        },
+        {
+          "internalType": "uint64",
+          "name": "resolvedAt",
+          "type": "uint64"
         }
       ],
-      "name": "resolveBattle",
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "predictionsCount",
+      "outputs": [
+        {
+          "internalType": "uint64",
+          "name": "",
+          "type": "uint64"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint64",
+          "name": "predictionId",
+          "type": "uint64"
+        },
+        {
+          "internalType": "uint8",
+          "name": "winningOptionId",
+          "type": "uint8"
+        }
+      ],
+      "name": "resolvePrediction",
       "outputs": [
         {
           "internalType": "bool",
@@ -597,54 +677,27 @@
     {
       "inputs": [
         {
-          "internalType": "uint64",
-          "name": "matchId",
-          "type": "uint64"
-        },
-        {
           "internalType": "address",
-          "name": "winner",
+          "name": "_intentsContract",
           "type": "address"
         }
       ],
-      "name": "resolveMatch",
-      "outputs": [
-        {
-          "internalType": "bool",
-          "name": "",
-          "type": "bool"
-        }
-      ],
+      "name": "setIntegrationsContract",
+      "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
     },
     {
-      "inputs": [
-        {
-          "internalType": "uint64",
-          "name": "raidId",
-          "type": "uint64"
-        },
-        {
-          "internalType": "address",
-          "name": "player",
-          "type": "address"
-        },
-        {
-          "internalType": "bool",
-          "name": "success",
-          "type": "bool"
-        }
-      ],
-      "name": "resolveRaidParticipation",
+      "inputs": [],
+      "name": "totalStake",
       "outputs": [
         {
-          "internalType": "bool",
+          "internalType": "uint256",
           "name": "",
-          "type": "bool"
+          "type": "uint256"
         }
       ],
-      "stateMutability": "nonpayable",
+      "stateMutability": "view",
       "type": "function"
     }
   ]

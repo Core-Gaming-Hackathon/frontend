@@ -102,10 +102,10 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
   
   // Get difficulty options
   const difficultyOptions = [
-    { value: DifficultyLevel.EASY, label: "Easy", reward: "Demo ETN", fee: "1 ETN" },
-    { value: DifficultyLevel.MEDIUM, label: "Medium", reward: "Demo ETN", fee: "2 ETN" },
-    { value: DifficultyLevel.HARD, label: "Hard", reward: "Demo ETN", fee: "5 ETN" },
-    { value: DifficultyLevel.EXPERT, label: "Expert", reward: "Demo ETN", fee: "10 ETN" }
+    { value: DifficultyLevel.EASY, label: "Easy", reward: "Demo tCORE", fee: "1 tCORE" },
+    { value: DifficultyLevel.MEDIUM, label: "Medium", reward: "Demo tCORE", fee: "2 tCORE" },
+    { value: DifficultyLevel.HARD, label: "Hard", reward: "Demo tCORE", fee: "5 tCORE" },
+    { value: DifficultyLevel.EXPERT, label: "Expert", reward: "Demo tCORE", fee: "10 tCORE" }
   ];
   
   // Get AI provider options
@@ -286,14 +286,14 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
           <div className="flex justify-between bg-card p-3 rounded-md">
             <span>Entry Fee:</span>
             <span className="font-medium">
-              {difficultyOptions.find(o => o.value === difficultyLevel)?.fee || "2 ETN"}
+              {difficultyOptions.find(o => o.value === difficultyLevel)?.fee || "2 tCORE"}
             </span>
           </div>
           
           <div className="flex justify-between bg-card p-3 rounded-md">
             <span>Potential Reward:</span>
             <span className="font-medium">
-              {difficultyOptions.find(o => o.value === difficultyLevel)?.reward || "10 ETN"}
+              {difficultyOptions.find(o => o.value === difficultyLevel)?.reward || "10 tCORE"}
             </span>
           </div>
         </div>

@@ -13,17 +13,17 @@ export const NETWORKS = {
 
 export type Network = typeof NETWORKS[keyof typeof NETWORKS];
 
-// Current network based on environment
-export const CURRENT_NETWORK = (process.env.NEXT_PUBLIC_EVM_NETWORK || 'testnet') as Network;
+// Current network based on environment - default to testnet
+export const CURRENT_NETWORK: Network = 'testnet';
 
 // Re-export the Chain IDs from the chain selector
 export enum ChainId {
-  ELECTRONEUM_TESTNET = 5201420
+  CORE_TESTNET = 1115
 }
 
 // Contract addresses by chain
 export const CONTRACT_ADDRESSES: Record<number, { predictionMarket: string; gameModes: string }> = {
-  [ChainId.ELECTRONEUM_TESTNET]: {
+  [ChainId.CORE_TESTNET]: {
     predictionMarket: "0x93012953008ef9AbcB71F48C340166E8f384e985",
     gameModes: "0xC44DE09ab7eEFC2a9a2116E04ca1fcEc86F520fF"
   }
@@ -67,7 +67,7 @@ export const GAS_LIMITS = {
 // Methods mapping for contracts
 export const CONTRACT_METHODS = {
   predictionMarket: {
-    // Add BaultroGames functions to predictionMarket for Electroneum Testnet
+    // Add BaultroGames functions to predictionMarket for CORE Testnet
     createMatch: 'createMatch',
     joinMatch: 'joinMatch',
     endMatch: 'endMatch',

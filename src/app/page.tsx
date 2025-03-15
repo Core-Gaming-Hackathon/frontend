@@ -193,7 +193,7 @@ export default function GameModesPage() {
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <h3 className="text-xl font-semibold">Loading Baultro</h3>
-            <p className="text-muted-foreground">Connecting to Electroneum network...</p>
+            <p className="text-muted-foreground">Connecting to CORE network...</p>
           </div>
         </div>
       )}

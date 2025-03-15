@@ -1,0 +1,38 @@
+---
+description: NextJS 15
+globs: 
+alwaysApply: true
+---
+We use Next.js 15 and its subsequent updates (15.1 and 15.2) introduced significant enhancements over Next.js 14, focusing on performance, developer experience, and new features. Here's an overview of the key differences:
+
+**Next.js 15**
+
+- **React 19 Support**: Introduced compatibility with React 19, allowing developers to leverage the latest React features. citeturn0search0
+
+- **Async Request APIs**: Transitioned APIs like `cookies`, `headers`, `params`, and `searchParams` to asynchronous, enabling a more efficient rendering and caching model. citeturn0search0
+
+- **Caching Semantics**: Modified caching defaults; `fetch` requests, `GET` Route Handlers, and client navigations are no longer cached by default, offering developers more explicit control over caching behavior. citeturn0search0
+
+- **Turbopack in Development**: Marked Turbopack as stable for development, providing faster local server startup and improved code updates with Fast Refresh. citeturn0search0
+
+**Next.js 15.1**
+
+- **React 19 Stable Release**: Confirmed full support for React 19 in both Pages Router and App Router, ensuring stability and compatibility. citeturn0search1
+
+- **Improved Error Debugging**: Enhanced error messages and stack traces in both the browser and terminal, simplifying the debugging process. citeturn0search1
+
+- **`after()` API**: Stabilized the `after()` API, allowing execution of code after a response has finished streaming, useful for tasks like logging and analytics. citeturn0search1
+
+- **Experimental Authorization APIs**: Introduced `forbidden()` and `unauthorized()` APIs for more granular authentication error handling, enabling customized responses for 403 and 401 errors. citeturn0search1
+
+**Next.js 15.2**
+
+- **Redesigned Error UI**: Introduced a new error overlay with improved stack traces, enhancing the developer experience during debugging. citeturn0search4
+
+- **Streaming Metadata**: Allowed the initial UI to render before `generateMetadata` completes, improving performance by not delaying the initial paint for metadata fetching. citeturn0search4
+
+- **Turbopack Performance Improvements**: Achieved up to 57.6% faster compile times and reduced memory usage during local development, making Turbopack more efficient than Webpack in most scenarios. citeturn0search4
+
+- **Experimental Features**: Added support for React View Transitions and Node.js Middleware, providing developers with cutting-edge tools for creating dynamic and efficient applications. citeturn0search4
+
+In summary, the progression from Next.js 14 to 15.2 brought substantial improvements in performance, error handling, and introduced new APIs, enhancing both the development process and application efficiency. 

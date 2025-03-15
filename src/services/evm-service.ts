@@ -9,8 +9,8 @@ import {
   BlockchainTransactionResponse
 } from '@/schemas/blockchain'; 
 import { evmWallet, ContractAbi, TransactionResponse } from '@/config/evm-wallet';
-import baultroFinalAbi from '@/abis/BaultroFinal.json';
 import baultroGamesAbi from '@/abis/BaultroGames.json';
+import baultroPredictionMarketAbi from '@/abis/BaultroPredictionMarket.json';
 import type { Abi } from 'viem';
 
 // Contract artifact interface
@@ -186,16 +186,16 @@ export class EVMService {
   private getContractAbi(contractName?: string): Abi {
     // Make sure we're properly typing the ABIs to match the expected Abi type
     if (!contractName) {
-      return baultroFinalAbi.abi as unknown as Abi;
+      return baultroPredictionMarketAbi.abi as unknown as Abi;
     }
 
     switch (contractName) {
       case 'predictionMarket':
-        return baultroFinalAbi.abi as unknown as Abi;
+        return baultroPredictionMarketAbi.abi as unknown as Abi;
       case 'gameModesContract':
         return baultroGamesAbi.abi as unknown as Abi;
       default:
-        return baultroFinalAbi.abi as unknown as Abi;
+        return baultroPredictionMarketAbi.abi as unknown as Abi;
     }
   }
 

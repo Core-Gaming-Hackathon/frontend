@@ -123,8 +123,8 @@ export function GameResult({
               : gameType === GameType.MYSTERY 
                 ? "solved" 
                 : "raided"
-        } the ${gameTypeString} challenge on Baultro with a score of ${result.score}! #BaultroGame #Web3Gaming #ELECTRONEUMChain`
-      : `Just had an epic attempt at the ${gameTypeString} challenge on Baultro! Will crack it next time! #BaultroGame #Web3Gaming #ELECTRONEUMChain`;
+        } the ${gameTypeString} challenge on Baultro with a score of ${result.score}! #BaultroGame #Web3Gaming #COREChain`
+      : `Just had an epic attempt at the ${gameTypeString} challenge on Baultro! Will crack it next time! #BaultroGame #Web3Gaming #COREChain`;
 
     const url = `${baseUrl}?text=${encodeURIComponent(text)}`;
     window.open(url, "_blank");

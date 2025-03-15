@@ -4,29 +4,29 @@
 import { defineChain } from 'viem';
 
 /**
- * Electroneum Testnet chain definition
+ * CORE Testnet chain definition
  */
-export const electrneumTestnet = defineChain({
-  id: 5201420,
-  name: 'Electroneum Testnet',
-  network: 'electroneum_testnet',
+export const coreTestnet = defineChain({
+  id: 1115,
+  name: 'CORE Testnet',
+  network: 'core_testnet',
   nativeCurrency: {
     decimals: 18,
-    name: 'Electroneum',
-    symbol: 'ETN',
+    name: 'CORE',
+    symbol: 'tCORE',
   },
   rpcUrls: {
     default: {
-      http: ['https://rpc.ankr.com/electroneum_testnet'],
+      http: ['https://rpc.test.btcs.network'],
     },
     public: {
-      http: ['https://rpc.ankr.com/electroneum_testnet'],
+      http: ['https://rpc.test.btcs.network'],
     },
   },
   blockExplorers: {
     default: {
-      name: 'Electroneum Explorer',
-      url: 'https://testnet-blockexplorer.electroneum.com',
+      name: 'CORE Explorer',
+      url: 'https://scan.test.btcs.network',
     },
   },
   testnet: true,

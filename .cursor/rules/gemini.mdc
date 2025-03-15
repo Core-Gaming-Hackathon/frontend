@@ -1,0 +1,12 @@
+---
+description: Gemini
+globs: 
+alwaysApply: true
+---
+gemini-2.0-flash only, no other models
+
+// Set the system instruction during model initialization
+const model = genAI.getGenerativeModel({
+  model: "gemini-2.0-flash",
+  systemInstruction: "You are a test user of the game Baultro ...",
+});

@@ -26,18 +26,18 @@ class ChainSelector {
   private activeChainId: number;
   
   constructor() {
-    // Initialize with Electroneum Testnet by default
-    this.activeChainId = 5201420;
+    // Initialize with CORE Testnet by default
+    this.activeChainId = 1115;
     
-    // Add Electroneum Testnet (only chain we're using)
-    this.chains[5201420] = {
-      chainId: 5201420,
-      name: "Electroneum Testnet",
-      rpcUrl: "https://rpc.ankr.com/electroneum_testnet",
-      blockExplorerUrl: "https://testnet-blockexplorer.electroneum.com",
+    // Add CORE Testnet (only chain we're using)
+    this.chains[1115] = {
+      chainId: 1115,
+      name: "CORE Testnet",
+      rpcUrl: "https://rpc.test.btcs.network",
+      blockExplorerUrl: "https://scan.test.btcs.network",
       nativeCurrency: {
-        name: "Electroneum",
-        symbol: "ETN",
+        name: "CORE",
+        symbol: "tCORE",
         decimals: 18,
       },
       predictionMarketContract: "0x93012953008ef9AbcB71F48C340166E8f384e985",

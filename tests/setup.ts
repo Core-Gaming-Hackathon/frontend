@@ -1,26 +1,18 @@
-// Global setup for tests
-import { afterEach } from 'bun:test';
-import { cleanup } from '@testing-library/react';
+/**
+ * Test setup file for Bun tests
+ * 
+ * This file is automatically loaded by Bun before running tests.
+ * It sets up the testing environment and initializes necessary utilities.
+ */
 
-// Clean up after each test
-afterEach(() => {
-  cleanup();
-});
+// Import DOM setup
+import './dom-setup';
 
-// Mock window.fs.readFile
-global.window = {
-  ...global.window,
-  fs: {
-    readFile: async () => {
-      return new Uint8Array([]);
-    }
-  }
-};
+// Import and initialize test utilities
+import { initTestEnvironment } from './test-utils';
 
-// Mock fetch API
-global.fetch = async () => {
-  return {
-    ok: true,
-    json: async () => ({ response: 'Mock response' }),
-  } as Response;
-};
+// Initialize the test environment
+initTestEnvironment();
+
+// Log that setup is complete
+console.log('Test environment setup complete');
