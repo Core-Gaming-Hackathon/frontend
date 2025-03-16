@@ -89,6 +89,7 @@ const createPrediction = mock(async () => true);
 const resolvePrediction = mock(async () => true);
 
 // Mock the wallet provider
+// @ts-expect-error - TypeScript errors for mock.module
 mock.module('@/providers/evm-wallet-provider', () => ({
   useWallet: () => ({
     isConnected: true,
@@ -110,26 +111,9 @@ mock.module('@/providers/evm-wallet-provider', () => ({
 }));
 
 // Mock the hooks
+// @ts-expect-error - TypeScript errors for mock.module
 mock.module('@/hooks/use-prediction-market', () => ({
   usePredictionMarket: () => ({
-    predictions: mockPredictions,
-    userBets: mockUserBets,
-    isLoading: false,
-    isCreatingPrediction: false,
-    isPlacingBet: false,
-    isResolvingPrediction: false,
-    isClaimingWinnings: false,
-    fetchPredictions,
-    fetchUserBets,
-    createPrediction,
-    placeBet,
-    resolvePrediction,
-    claimWinnings
-  })
-}));
-
-mock.module('@/hooks/use-enhanced-prediction-market', () => ({
-  useEnhancedPredictionMarket: () => ({
     predictions: mockPredictions,
     userBets: mockUserBets,
     isLoading: false,
@@ -149,6 +133,7 @@ mock.module('@/hooks/use-enhanced-prediction-market', () => ({
 }));
 
 // Mock the auto-refresh hook
+// @ts-expect-error - TypeScript errors for mock.module
 mock.module('@/hooks/use-auto-refresh', () => ({
   useAutoRefresh: () => ({
     refresh: mock(async () => {}),

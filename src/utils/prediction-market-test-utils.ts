@@ -5,7 +5,9 @@
  * without requiring actual blockchain interactions
  */
 
-import { Prediction } from "@/app/predict/page";
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
+import { Prediction } from "@/utils/prediction-utils";
 
 // Mock prediction data for testing
 export const mockPredictions: Prediction[] = [
@@ -101,6 +103,7 @@ export function simulateGetPredictions(): Promise<Prediction[]> {
 /**
  * Simulates a contract call to create a prediction
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function simulateCreatePrediction(
   _title: string,
   _description: string,
@@ -122,6 +125,7 @@ export function simulateCreatePrediction(
 /**
  * Simulates a contract call to place a bet
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function simulatePlaceBet(
   _predictionId: number,
   _optionId: number,
@@ -142,6 +146,7 @@ export function simulatePlaceBet(
 /**
  * Simulates a contract call to resolve a prediction
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function simulateResolvePrediction(
   _predictionId: number,
   _winningOptionId: number
@@ -161,6 +166,7 @@ export function simulateResolvePrediction(
 /**
  * Simulates a contract call to claim winnings
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function simulateClaimWinnings(
   _predictionId: number
 ): Promise<{ success: boolean; txHash: string }> {
@@ -179,6 +185,7 @@ export function simulateClaimWinnings(
 /**
  * Simulates a contract call to get user bets
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function simulateGetUserBets(_address: string): Promise<typeof mockUserBets> {
   return new Promise((resolve) => {
     // Simulate network delay

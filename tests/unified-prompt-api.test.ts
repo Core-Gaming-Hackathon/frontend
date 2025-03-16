@@ -122,6 +122,6 @@ describe('UnifiedPromptApi', () => {
     expect(result).toHaveProperty('response');
     expect(result).toHaveProperty('success');
     expect(result.success).toBe(true);
-    expect(result.response).toContain('Success');
+    expect(result.response).toBe("You've succeeded! Congratulations on completing the challenge.");
   });
 });

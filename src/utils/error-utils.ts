@@ -246,5 +246,6 @@ export function showLoadingToast<T>(
     error: string;
   }
 ): Promise<T> {
-  return toast.promise(promise, messages);
+  // Cast the result to Promise<T> to satisfy TypeScript
+  return toast.promise(promise, messages) as unknown as Promise<T>;
 } 

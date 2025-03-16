@@ -6,7 +6,6 @@
  */
 import { AIMessage } from "@/shared/schemas/chat/types";
 import { toast } from "sonner";
-import { AlertCircle } from "lucide-react";
 
 // Import environment configuration
 import { getZerePyApiUrl } from "@/lib/env";
@@ -46,7 +45,8 @@ export class UnifiedPromptApi {
       toast.info("Mock mode enabled - Using simulated AI responses", {
         id: "mock-mode-enabled",
         duration: 5000,
-        icon: <AlertCircle className="h-4 w-4" />
+        // Use a string description instead of JSX for testing environment
+        icon: "alert-circle"
       });
     }
   }
@@ -87,7 +87,8 @@ export class UnifiedPromptApi {
       toast.warning(`Using mock data for ${source}`, {
         id: `mock-data-${source}`,
         duration: 5000,
-        icon: <AlertCircle className="h-4 w-4" />,
+        // Use a string description instead of JSX for testing environment
+        icon: "alert-circle",
         description: "Could not connect to the AI service. Using simulated responses instead."
       });
     }

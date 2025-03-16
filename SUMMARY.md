@@ -50,11 +50,11 @@ We've successfully enhanced the Core DAO Frontend with a focus on the prediction
 ## Files Created/Modified
 
 ### New Files
-- `src/utils/enhanced-error-utils.ts`: Enhanced error handling utilities
+- `src/utils/error-utils.ts`: Error handling utilities
 - `src/utils/data-fetching-utils.ts`: Utilities for data fetching with caching
 - `src/components/ui/advanced-loading-state.tsx`: Advanced loading state component
-- `src/hooks/use-enhanced-prediction-market.ts`: Enhanced prediction market hook
-- `src/app/predict/enhanced-page.tsx`: Enhanced prediction page
+- `src/hooks/use-prediction-market.ts`: Prediction market hook
+- `src/app/predict/predictions-page.tsx`: Predictions page
 - `tests/prediction-market-e2e.test.tsx`: End-to-end tests for prediction market
 - `tests/dom-setup.ts`: DOM setup for tests
 - `README.md`: Project documentation

@@ -19,7 +19,7 @@ import { PredictionCard } from "@/components/prediction/prediction-card";
 import { UserBetsCard } from "@/components/prediction/user-bets-card";
 import { TextShimmer } from "@/components/ui/text-shimmer";
 import { PredictionCardSkeleton, UserBetCardSkeleton } from "@/components/ui/skeleton";
-import { useEnhancedPredictionMarket } from "@/hooks/use-enhanced-prediction-market";
+import { usePredictionMarket } from "@/hooks/use-prediction-market";
 import { useAutoRefresh } from "@/hooks/use-auto-refresh";
 import { isResolved } from "@/utils/prediction-utils";
 import { formatDistanceToNow } from "date-fns";
@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import { AdvancedLoadingState } from "@/components/ui/advanced-loading-state";
 import { clearCacheEntry } from "@/utils/data-fetching-utils";
 
-export default function EnhancedPredictionsPage() {
+export default function PredictionsPage() {
   const { isConnected, signIn } = useWallet();
   const { 
     predictions, 
@@ -38,7 +38,7 @@ export default function EnhancedPredictionsPage() {
     fetchUserBets,
     claimWinnings,
     clearError
-  } = useEnhancedPredictionMarket();
+  } = usePredictionMarket();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("active");
 

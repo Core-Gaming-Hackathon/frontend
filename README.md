@@ -1,133 +1,166 @@
 # Core DAO Frontend
 
-A modern frontend for the Core DAO prediction market application.
+A modern, production-ready frontend application for the Core DAO platform, built with Next.js 15, React 19, and Bun.
 
-## Features
+## 🚀 Features
 
 - **Prediction Markets**: Create and participate in prediction markets
-- **Betting System**: Place bets on different outcomes
-- **Wallet Integration**: Connect your wallet to interact with the blockchain
-- **Auto-refresh**: Real-time updates of prediction markets and bets
-- **Responsive Design**: Works on desktop and mobile devices
+- **Gaming**: Interactive gaming experiences
+- **Chat Interface**: AI-powered chat interface using Gemini 2.0 Flash
+- **Marketplace**: Buy and sell digital assets
+- **Leaderboard**: Track user rankings and achievements
 
-## Getting Started
+## 📋 Prerequisites
 
-### Prerequisites
+- [Bun](https://bun.sh/) v1.2.5 or higher
+- [Node.js](https://nodejs.org/) v20 or higher (for certain tools)
+- [PostgreSQL](https://www.postgresql.org/) database
 
-- Node.js 18+
-- Bun package manager
+## 🛠️ Installation
 
-### Installation
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-organization/core-dao-frontend.git
+   cd core-dao-frontend
+   ```
 
+2. Install dependencies:
+   ```bash
+   bun install
+   ```
+
+3. Set up environment variables:
+   ```bash
+   cp .env.example .env.local
+   ```
+   Edit `.env.local` with your specific configuration.
+
+4. Run database migrations:
+   ```bash
+   bun run db:migrate
+   ```
+
+5. Start the development server:
+   ```bash
+   bun run dev
+   ```
+
+## 🧪 Testing
+
+Run the test suite:
 ```bash
-# Clone the repository
-git clone https://github.com/your-username/core-dao-frontend.git
-cd core-dao-frontend
-
-# Install dependencies
-bun install
-```
-
-### Development
-
-```bash
-# Start the development server
-bun dev
-```
-
-### Build
-
-```bash
-# Build for production
-bun run build
-```
-
-### Testing
-
-```bash
-# Run all tests
 bun test
-
-# Run only working tests
-bun test:working
 ```
 
-### Test Coverage
+Run specific tests:
+```bash
+bun test tests/prediction-market-e2e.test.tsx
+```
 
-- **Unit Tests**: Core utility functions and services
-- **Component Tests**: UI components and their interactions
-- **Integration Tests**: Interactions between multiple components
-- **E2E Tests**: Complete user flows like prediction market interactions
+Watch mode for development:
+```bash
+bun test:watch
+```
 
-### Testing Strategy
+## 🏗️ Build
 
-- **Mock Implementations**: For testing without external dependencies
-  - Mock API responses for AI services
-  - Mock blockchain interactions
-- **Test Environment**: Uses Bun's built-in test runner
-- **Test Utilities**: Custom helpers for testing React components
+Build for production:
+```bash
+bun run prod:build
+```
 
-For a detailed overview of the test status, see [TEST_SUMMARY.md](./TEST_SUMMARY.md).
+Start production server:
+```bash
+bun run prod:start
+```
 
-## Project Structure
+## 📊 Bundle Analysis
+
+Analyze the bundle size:
+```bash
+bun run analyze
+```
+
+## 🗄️ Database
+
+The application uses PostgreSQL with Drizzle ORM for database operations. For comprehensive database documentation, see [DATABASE.md](./DATABASE.md).
+
+### Database Commands
+
+Generate migrations:
+```bash
+bun run db:generate
+```
+
+Run migrations:
+```bash
+bun run db:migrate
+```
+
+View database with Drizzle Studio:
+```bash
+bun run db:studio
+```
+
+Test database functionality:
+```bash
+bun run db:test
+```
+
+### Database Schema
+
+The database stores information about:
+- Users and their statistics
+- Predictions and their options
+- Bets placed on predictions
+
+See [DATABASE.md](./DATABASE.md) for detailed schema information and usage examples.
+
+## 📚 Documentation
+
+- [Database Documentation](./DATABASE.md)
+- [Deployment Guide](./DEPLOYMENT.md)
+- [Production Checklist](./PRODUCTION_CHECKLIST.md)
+- [Test Summary](./TEST_SUMMARY.md)
+
+## 🧩 Project Structure
 
 ```
 core-dao-frontend/
+├── public/              # Static assets
 ├── src/
-│   ├── app/                 # Next.js app directory
-│   ├── components/          # React components
-│   │   ├── ui/              # UI components
-│   │   └── prediction/      # Prediction-specific components
-│   ├── hooks/               # Custom React hooks
-│   ├── providers/           # Context providers
-│   ├── utils/               # Utility functions
-│   ├── abis/                # Contract ABIs
-│   └── config/              # Configuration files
-├── public/                  # Static assets
-├── tests/                   # Test files
-└── ...
+│   ├── app/             # Next.js app router pages
+│   ├── db/              # Database schema and migrations
+│   │   ├── migrations/  # Database migration files
+│   │   └── schema/      # Database schema definitions
+│   ├── components/      # React components
+│   ├── hooks/           # Custom React hooks
+│   ├── lib/             # Utility libraries
+│   ├── scripts/         # Utility scripts
+│   ├── services/        # API services
+│   ├── styles/          # Global styles
+│   └── utils/           # Utility functions
+├── tests/               # Test files
+├── .env.example         # Example environment variables
+├── DATABASE.md          # Database documentation
+├── DEPLOYMENT.md        # Deployment guide
+├── next.config.js       # Next.js configuration
+├── package.json         # Project dependencies
+└── tsconfig.json        # TypeScript configuration
 ```
 
-## Key Components
+## 🔧 Environment Variables
 
-### Prediction Market
+See [.env.example](./.env.example) for all required environment variables.
 
-The prediction market functionality is implemented with the following components:
+## 🚢 Deployment
 
-- `PredictionCard`: Displays a prediction and allows users to place bets
-- `UserBetsCard`: Shows user's bets and allows claiming winnings
-- `CreatePredictionDialog`: Dialog for creating new predictions
+For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md).
 
-### Hooks
+## 🔒 Security
 
-- `usePredictionMarket`: Hook for interacting with the prediction market contract
-- `useEnhancedPredictionMarket`: Enhanced version with better error handling and caching
-- `useAutoRefresh`: Hook for automatically refreshing data
+For security concerns, please email security@your-organization.com.
 
-### UI Components
+## 📄 License
 
-- `LoadingSpinner`: Reusable loading spinner with different sizes and variants
-- `Skeleton`: Loading skeleton for content that's being fetched
-- `AdvancedLoadingState`: Component for handling various loading states
-
-## Error Handling
-
-The application uses a comprehensive error handling system:
-
-- Error categorization for different types of errors
-- User-friendly error messages
-- Recovery strategies for common errors
-- Toast notifications for feedback
-
-## Data Fetching
-
-Data fetching is implemented with:
-
-- Caching for better performance
-- Retry mechanisms for failed requests
-- Fallback to mock data when needed
-- Auto-refresh for real-time updates
-
-## License
-
-MIT
+This project is licensed under the MIT License - see the LICENSE file for details.

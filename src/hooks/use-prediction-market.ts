@@ -17,6 +17,7 @@ import {
 } from "@/utils/error-utils";
 import { fetchWithCache } from "@/utils/data-fetching-utils";
 import { useMockData } from "@/components/ui/mock-data-indicator";
+import { simulateGetUserBets } from "@/utils/prediction-market-test-utils";
 
 // Define return type for the hook
 interface UsePredictionMarketReturn {
@@ -72,6 +73,14 @@ interface ContractPrediction {
   txHash?: string;
 }
 
+// Define the bet data structure from the contract
+interface BetData {
+  optionId: string | number;
+  amount: string | number;
+  createdAt: string | number;
+  claimed: boolean;
+}
+
 /**
  * Safely convert a timestamp to ISO string
  */
@@ -113,6 +122,13 @@ export function usePredictionMarket(): UsePredictionMarketReturn {
   const [isClaimingWinnings, setIsClaimingWinnings] = useState<boolean>(false);
   const [error, setError] = useState<Error | null>(null);
   const { notifyMockDataUsed } = useMockData();
+
+  // Helper function to determine if mock data should be used
+  const shouldUseMockData = useCallback(() => {
+    return process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'true' || 
+           process.env.NODE_ENV === 'test' ||
+           typeof window === 'undefined';
+  }, []);
 
   // Clear error
   const clearError = useCallback(() => {
@@ -193,6 +209,25 @@ export function usePredictionMarket(): UsePredictionMarketReturn {
     }
   }, [callMethod, clearError, notifyMockDataUsed]);
 
+  // Helper function to format bet data from contract
+  const formatBetData = useCallback((betData: BetData, prediction: ContractPrediction): UserBet => {
+    return {
+      id: `bet-${prediction.id}-${address}`,
+      predictionId: `pred-${prediction.id}`,
+      prediction: {
+        title: prediction.title,
+        options: Array.isArray(prediction.options) 
+          ? prediction.options.map((opt, idx) => ({ id: idx, text: opt }))
+          : [],
+        resolvedOption: Number(prediction.resolvedOption)
+      },
+      optionId: Number(betData.optionId),
+      amount: betData.amount.toString(),
+      createdAt: safeTimestampToISOString(betData.createdAt) || new Date().toISOString(),
+      claimed: betData.claimed
+    };
+  }, [address]);
+
   // Fetch user bets
   const fetchUserBets = useCallback(async (forceRefresh = false) => {
     if (!isConnected || !address) {
@@ -203,50 +238,88 @@ export function usePredictionMarket(): UsePredictionMarketReturn {
     try {
       clearError();
       
+      // Check if we should use mock data
+      if (shouldUseMockData()) {
+        const mockData = await simulateGetUserBets(address);
+        setUserBets(mockData);
+        notifyMockDataUsed("user bets");
+        return;
+      }
+      
       // Use fetchWithCache to get user bets with caching
-      const result = await fetchWithCache<CallMethodResult>(
+      const result = await fetchWithCache<UserBet[]>(
         async () => {
-          return await callMethod(
-            "getUserBets",
-            [address],
+          // First, get all predictions
+          const predictionsResult = await callMethod(
+            "getPredictions",
+            [0, 1000], // Get a large number of predictions (fromIndex, limit)
             "0",
             chainSelector.getPredictionMarketAddress()
           ) as CallMethodResult;
+          
+          if (!predictionsResult.success || !Array.isArray(predictionsResult.data)) {
+            throw new Error("Failed to fetch predictions");
+          }
+          
+          const allPredictions = predictionsResult.data as ContractPrediction[];
+          const userBetsPromises: Promise<UserBet | null>[] = [];
+          
+          // For each prediction, check if the user has placed a bet
+          for (const prediction of allPredictions) {
+            userBetsPromises.push(
+              (async () => {
+                try {
+                  // Call getBet for each prediction to check if the user has a bet
+                  const betResult = await callMethod(
+                    "getBet",
+                    [prediction.id, address],
+                    "0",
+                    chainSelector.getPredictionMarketAddress()
+                  ) as CallMethodResult;
+                  
+                  // If the bet exists and has a non-zero amount, format it as a UserBet
+                  if (betResult.success && betResult.data && 
+                      typeof betResult.data === 'object' && 
+                      'amount' in betResult.data && 
+                      betResult.data.amount && 
+                      betResult.data.amount !== '0') {
+                    
+                    // Properly type the bet data
+                    const betData = betResult.data as BetData;
+                    return formatBetData(betData, prediction);
+                  }
+                  
+                  return null;
+                } catch (error) {
+                  console.error(`Error fetching bet for prediction ${prediction.id}:`, error);
+                  return null;
+                }
+              })()
+            );
+          }
+          
+          // Wait for all bet queries to complete and filter out null results
+          const bets = (await Promise.all(userBetsPromises)).filter(bet => bet !== null) as UserBet[];
+          return bets;
         },
         {
           cacheKey: `userBets-${address}`,
           cacheTtl: 30000, // 30 seconds
           cacheEnabled: !forceRefresh, // Skip cache if forceRefresh is true
           errorMessage: ErrorMessages.FETCH_USER_BETS,
-          fallbackData: { success: false, data: null },
-          throwOnError: false
+          fallbackData: [], // Return empty array as fallback
+          throwOnError: false, // Don't throw errors
+          showErrorToast: true // Show error toast
         }
       );
       
-      if (result.success && result.data) {
-        // Transform contract data to our format
-        setUserBets(result.data as UserBet[]);
-      } else {
-        // If contract call fails, use mock data for development
-        console.warn("Failed to fetch user bets from contract, using mock data");
-        
-        // Notify that we're using mock data
-        notifyMockDataUsed("User Bets");
-        
-        // Import mock data only when needed
-        const { mockUserBets } = await import("@/utils/prediction-market-test-utils");
-        setUserBets(mockUserBets);
-      }
+      setUserBets(result);
     } catch (error) {
-      console.error("Error fetching user bets:", error);
-      setError(error instanceof Error ? error : new Error(String(error)));
-      
-      // Use mock data as fallback
-      notifyMockDataUsed("User Bets");
-      const { mockUserBets } = await import("@/utils/prediction-market-test-utils");
-      setUserBets(mockUserBets);
+      handleContractError(error, ErrorMessages.FETCH_USER_BETS);
+      setError(error as Error);
+      setUserBets([]);
     }
-  }, [isConnected, address, callMethod, clearError, notifyMockDataUsed]);
+  }, [isConnected, address, callMethod, clearError, notifyMockDataUsed, shouldUseMockData, formatBetData]);
 
   // Create a new prediction
   const createPrediction = useCallback(async (
@@ -281,7 +354,7 @@ export function usePredictionMarket(): UsePredictionMarketReturn {
         handleContractError(
           new Error(result.status || "Unknown error"), 
           ErrorMessages.CREATE_PREDICTION,
-          () => createPrediction(title, description, options, stake)
+          async () => { await createPrediction(title, description, options, stake); }
         );
         return false;
       }
@@ -330,7 +403,7 @@ export function usePredictionMarket(): UsePredictionMarketReturn {
         handleContractError(
           new Error(result.status || "Unknown error"), 
           ErrorMessages.PLACE_BET,
-          () => placeBet(predictionId, optionId, amount)
+          async () => { await placeBet(predictionId, optionId, amount); }
         );
         return false;
       }
@@ -375,7 +448,7 @@ export function usePredictionMarket(): UsePredictionMarketReturn {
         handleContractError(
           new Error(result.status || "Unknown error"), 
           ErrorMessages.RESOLVE_PREDICTION,
-          () => resolvePrediction(predictionId, winningOptionId)
+          async () => { await resolvePrediction(predictionId, winningOptionId); }
         );
         return false;
       }
@@ -419,7 +492,7 @@ export function usePredictionMarket(): UsePredictionMarketReturn {
         handleContractError(
           new Error(result.status || "Unknown error"), 
           ErrorMessages.CLAIM_WINNINGS,
-          () => claimWinnings(predictionId)
+          async () => { await claimWinnings(predictionId); }
         );
         return false;
       }

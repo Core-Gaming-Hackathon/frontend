@@ -13,7 +13,12 @@
     "db:generate": "bunx drizzle-kit generate",
     "db:migrate": "bun run src/scripts/migrate.ts",
     "db:studio": "bunx drizzle-kit studio",
-    "db:push": "bunx drizzle-kit push"
+    "db:push": "bunx drizzle-kit push",
+    "db:test": "bun run src/scripts/db-test.ts",
+    "analyze": "cross-env ANALYZE=true next build",
+    "prod:build": "cross-env NODE_ENV=production next build",
+    "prod:start": "cross-env NODE_ENV=production next start",
+    "prod:migrate": "cross-env NODE_ENV=production bun run src/scripts/migrate.ts"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.0",
@@ -75,7 +80,9 @@
     "jsdom": "^26.0.0",
     "tailwindcss": "^4",
     "tsx": "^4.19.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "@next/bundle-analyzer": "^15.2.1",
+    "cross-env": "^7.0.3"
   },
   "bun": {
     "test": {

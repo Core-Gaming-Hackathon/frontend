@@ -21,6 +21,7 @@ const EVMWalletProvider = ({ children }: { children: React.ReactNode }) => {
 };
 
 // Mock the EVM wallet module
+// @ts-expect-error - TypeScript errors for mock.module
 mock.module('../src/config/evm-wallet', () => {
   const mockService = new MockEVMService();
   
@@ -42,6 +43,7 @@ mock.module('../src/config/evm-wallet', () => {
 });
 
 // Mock the chain selector
+// @ts-expect-error - TypeScript errors for mock.module
 mock.module('../src/config/chain-selector', () => ({
   chainSelector: {
     getActiveChain: mock(() => ({
@@ -81,12 +83,12 @@ describe('EVMWalletProvider', () => {
     expect(balance).toBe('100000000000000000');
     
     // Test signing
-    const signature = await mockService.signMessage('Test message');
+    const signature = await mockService.signMessage('0x1234', 'Test message');
     expect(signature).toContain('0x');
     
     // Test transaction
-    const txResult = await mockService.sendTransaction('0xdestination', '100');
-    expect(txResult.status).toBe('success');
-    expect(txResult.hash).toContain('0x');
+    // The sendTransaction method returns a string hash, not a TransactionResult object
+    const txHash = await mockService.sendTransaction('0xdestination', '100', '');
+    expect(txHash).toContain('0x');
   });
 });

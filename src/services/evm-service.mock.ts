@@ -43,19 +43,19 @@ export class MockEVMService {
     this.address = '';
   });
   
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getBalance = mock(async (_address?: string): Promise<string> => {
     return '100000000000000000'; // 0.1 ETH in wei
   });
   
-  signMessage = mock(async (_message: string): Promise<string> => {
-    return `0x${'1'.repeat(130)}`; // Mock signature
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  signMessage = mock(async (_address: string, _message: string): Promise<string> => {
+    return "0x1234567890abcdef";
   });
   
-  sendTransaction = mock(async (_to: string, _value: string, _data?: string): Promise<TransactionResult> => {
-    return {
-      hash: `0x${'a'.repeat(64)}`,
-      status: 'success'
-    };
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  sendTransaction = mock(async (_to: string, _value: string, _data: string): Promise<string> => {
+    return "0x1234567890abcdef";
   });
   
   isConnected = mock((): boolean => {

@@ -78,8 +78,8 @@ The following tests are now passing successfully:
      - `src/services/evm-service.mock.ts`
      - `src/utils/data-fetching-utils.ts`
      - `src/utils/prediction-market-test-utils.ts`
-     - `src/hooks/use-enhanced-prediction-market.ts`
-     - `src/app/predict/enhanced-page.tsx`
+     - `src/hooks/use-prediction-market.ts`
+     - `src/app/predict/predictions-page.tsx`
 
 ## Next Steps
 

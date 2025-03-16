@@ -5,7 +5,10 @@
  * and retry mechanisms.
  */
 
-import { handleEnhancedError, ErrorCategory } from "./enhanced-error-utils";
+import { handleError, ErrorCategory } from "./error-utils";
+
+// Add DATA_FETCHING to ErrorCategory if it doesn't exist
+const DATA_FETCHING = ErrorCategory.NETWORK; // Use NETWORK as a fallback
 
 // Cache for storing fetched data
 interface CacheEntry<T> {
@@ -99,7 +102,7 @@ interface FetchOptions<T> {
   /**
    * Function to transform the fetched data
    */
-  transform?: (data: unknown) => T;
+  transform?: (data: unknown) => Awaited<T>;
 }
 
 /**
@@ -139,7 +142,7 @@ export async function fetchWithCache<T>(
       // If stale while revalidate is enabled, return stale data and revalidate in background
       if (staleWhileRevalidate) {
         // Revalidate in background
-        revalidateCache(fetchFn, cacheKey, cacheTtl, transform).catch(console.error);
+        revalidateCache(fetchFn, cacheKey, cacheTtl, transform as (data: unknown) => Awaited<T>).catch(console.error);
         
         // Return stale data
         return cacheEntry.data;
@@ -147,32 +150,56 @@ export async function fetchWithCache<T>(
     }
   }
   
-  // Fetch fresh data
-  return fetchWithRetry(
-    fetchFn,
-    {
+  // Fetch data with retry
+  try {
+    let data = await fetchWithRetry(fetchFn, {
       retryCount,
       retryDelay,
       exponentialBackoff,
       isRetryable,
       fallbackData,
-      throwOnError,
-      showErrorToast,
-      errorMessage,
-      transform,
-      onSuccess: (data) => {
-        // Update cache if enabled
-        if (cacheEnabled) {
-          const now = Date.now();
-          cache[cacheKey] = {
-            data,
-            timestamp: now,
-            expiresAt: now + cacheTtl
-          };
-        }
-      }
+      throwOnError: false, // We'll handle errors ourselves
+      showErrorToast: false // We'll handle errors ourselves
+    });
+    
+    // Transform data if transform function is provided
+    if (transform) {
+      data = transform(data) as Awaited<T>;
     }
-  );
+    
+    // Cache data if caching is enabled
+    if (cacheEnabled) {
+      const now = Date.now();
+      cache[cacheKey] = {
+        data,
+        timestamp: now,
+        expiresAt: now + cacheTtl
+      };
+    }
+    
+    return data;
+  } catch (error) {
+    // Handle error
+    if (showErrorToast) {
+      handleError(error, {
+        message: errorMessage,
+        category: DATA_FETCHING
+      });
+    }
+    
+    // Throw error if throwOnError is true
+    if (throwOnError) {
+      throw error;
+    }
+    
+    // Return fallback data if provided
+    if (fallbackData !== undefined) {
+      return fallbackData;
+    }
+    
+    // Rethrow error if no fallback data
+    throw error;
+  }
 }
 
 /**
@@ -182,14 +209,14 @@ async function revalidateCache<T>(
   fetchFn: () => Promise<T>,
   cacheKey: string,
   cacheTtl: number,
-  transform?: (data: unknown) => T
+  transform?: (data: unknown) => Awaited<T>
 ): Promise<void> {
   try {
     let data = await fetchFn();
     
     // Transform data if transform function is provided
     if (transform) {
-      data = transform(data);
+      data = transform(data) as Awaited<T>;
     }
     
     // Update cache
@@ -216,10 +243,10 @@ async function fetchWithRetry<T>(
     exponentialBackoff: boolean;
     isRetryable: (error: unknown) => boolean;
     fallbackData?: T;
-    throwOnError: boolean;
-    showErrorToast: boolean;
+    throwOnError?: boolean;
+    showErrorToast?: boolean;
     errorMessage?: string;
-    transform?: (data: unknown) => T;
+    transform?: (data: unknown) => Awaited<T>;
     onSuccess?: (data: T) => void;
   }
 ): Promise<T> {
@@ -229,8 +256,8 @@ async function fetchWithRetry<T>(
     exponentialBackoff,
     isRetryable,
     fallbackData,
-    throwOnError,
-    showErrorToast,
+    throwOnError = false,
+    showErrorToast = true,
     errorMessage,
     transform,
     onSuccess
@@ -245,7 +272,7 @@ async function fetchWithRetry<T>(
       
       // Transform data if transform function is provided
       if (transform) {
-        data = transform(data);
+        data = transform(data) as Awaited<T>;
       }
       
       // Call onSuccess callback if provided
@@ -257,36 +284,35 @@ async function fetchWithRetry<T>(
     } catch (error) {
       lastError = error;
       
-      // If this is the last attempt, break
+      // If this is the last attempt, don't delay
       if (attempt === retryCount) {
         break;
       }
       
-      // If error is not retryable, break
+      // Check if error is retryable
       if (!isRetryable(error)) {
         break;
       }
       
-      // Wait before retrying
+      // Calculate delay for next attempt
       const delay = exponentialBackoff
         ? retryDelay * Math.pow(2, attempt)
         : retryDelay;
       
+      // Wait before next attempt
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
   
-  // If we got here, all attempts failed
-  
-  // Show error toast if enabled
+  // Handle error after all retries
   if (showErrorToast) {
-    handleEnhancedError(lastError, {
-      category: ErrorCategory.DATA_FETCHING,
-      message: errorMessage || "Failed to fetch data"
+    handleError(lastError, {
+      message: errorMessage,
+      category: DATA_FETCHING
     });
   }
   
-  // Throw error if enabled
+  // Throw error if throwOnError is true
   if (throwOnError) {
     throw lastError;
   }
@@ -296,7 +322,7 @@ async function fetchWithRetry<T>(
     return fallbackData;
   }
   
-  // Otherwise throw error
+  // Rethrow error if no fallback data
   throw lastError;
 }
 
