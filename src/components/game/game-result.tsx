@@ -77,21 +77,37 @@ export function GameResult({
       // For testing, log the full session ID to understand its format
       console.log(`Formatting session ID: ${sessionId}`);
       
-      // The contract expects a uint64 (0 to 2^64-1)
-      // Extract just numeric parts from the session ID
+      // Try to extract a likely battleId from the sessionId
+      // Strategy 1: Extract after "battle_" prefix
+      if (sessionId.includes("battle_")) {
+        const parts = sessionId.split("battle_")[1];
+        if (parts) {
+          // Extract the first sequence of digits - likely the timestamp portion
+          const match = parts.match(/^(\d+)/);
+          if (match && match[1]) {
+            return match[1];
+          }
+        }
+      }
+      
+      // Strategy 2: Extract the first continuous sequence of digits
+      const match = sessionId.match(/\d+/);
+      if (match && match[0]) {
+        return match[0];
+      }
+      
+      // Strategy 3: Try to extract any numeric content as fallback
       const numericPart = sessionId.replace(/\D/g, '');
-      
-      if (!numericPart) {
-        console.error('No numeric part found in sessionId');
-        return '0'; // Return a safe default
+      if (numericPart) {
+        // If it's too long for uint64, take just the first part (likely timestamp)
+        if (numericPart.length > 10) {
+          return numericPart.substring(0, 10);
+        }
+        return numericPart;
       }
       
-      // If the numeric part is too long for uint64, take the first 10 digits
-      if (numericPart.length > 10) {
-        return numericPart.substring(0, 10);
-      }
-      
-      return numericPart;
+      console.error('No numeric part found in sessionId');
+      return '0'; // Return a safe default
     } catch (error) {
       console.error('Error formatting battleId:', error);
       return '0'; // Return a safe default if parsing fails
@@ -115,14 +131,42 @@ export function GameResult({
       // The result should have a contractId field that contains the actual blockchain battle ID
       if (result.contractId) {
         console.log(`Using contractId: ${result.contractId}`);
-        battleId = result.contractId;
         
-        // Ensure the contractId is numeric for the blockchain
+        // If it's an object with data or id property, extract that
+        if (typeof result.contractId === 'object' && result.contractId !== null) {
+          const contractIdObj = result.contractId as Record<string, unknown>;
+          if ('data' in contractIdObj) {
+            battleId = String(contractIdObj.data);
+          } else if ('id' in contractIdObj) {
+            battleId = String(contractIdObj.id);
+          } else {
+            battleId = JSON.stringify(contractIdObj);
+          }
+        } else {
+          battleId = String(result.contractId);
+        }
+        
+        // Try to extract a clean numeric ID
         if (!/^\d+$/.test(battleId)) {
           console.log(`contractId is not purely numeric, extracting numbers...`);
-          const numericPart = battleId.replace(/\D/g, '');
-          if (numericPart) {
-            battleId = numericPart;
+          // For strings like "battle_123456_789", extract the first number
+          if (battleId.includes('battle_')) {
+            const match = battleId.match(/battle_(\d+)/);
+            if (match && match[1]) {
+              battleId = match[1];
+            } else {
+              // Just extract any digits as fallback
+              const numericPart = battleId.replace(/\D/g, '');
+              if (numericPart) {
+                battleId = numericPart;
+              }
+            }
+          } else {
+            // Just extract any digits as fallback
+            const numericPart = battleId.replace(/\D/g, '');
+            if (numericPart) {
+              battleId = numericPart;
+            }
           }
         }
       } else {
@@ -171,10 +215,12 @@ export function GameResult({
       // Get more information about the error
       if (error && typeof error === 'object' && 'message' in error) {
         const errorMessage = (error as Error).message;
+        console.log('Detailed error message:', errorMessage);
+        
         if (errorMessage.includes('Battle not found')) {
           toast({
             title: "Claim Failed",
-            description: "Battle not found on the blockchain. The session may have expired or not been properly recorded.",
+            description: "Battle not found on the blockchain. You can only claim rewards for battles that you created in this session.",
             variant: "destructive",
           });
         } else {
