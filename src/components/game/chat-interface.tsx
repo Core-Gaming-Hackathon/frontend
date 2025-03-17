@@ -11,15 +11,26 @@ import { AIServiceFactory, AIProviderType } from "@/lib/ai-service-factory";
 import Image from "next/image";
 import { toast } from "sonner";
 import { toWei } from "@/utils/token-utils";
-
-// Import chain configuration to get contract addresses
+import { createPublicClient, createWalletClient, http, custom, decodeEventLog } from "viem";
 import { chainSelector } from "@/config/chain-selector";
+import baultroGamesAbi from "@/abis/BaultroGames.json";
+
+// Define EthereumProvider type
+type EthereumProvider = {
+  isMetaMask?: boolean;
+  request: (request: { method: string; params?: any[] }) => Promise<unknown>;
+  on: (eventName: string, callback: (...args: unknown[]) => void) => void;
+  removeListener: (eventName: string, callback: (...args: unknown[]) => void) => void;
+  selectedAddress?: string;
+  chainId?: string;
+};
 
 // Define transaction result type that includes optional errorMessage
 interface TransactionResult {
   hash: string;
   status: string;
   success: boolean;
+  data?: unknown;
   errorMessage?: string;
 }
 
@@ -31,18 +42,20 @@ interface ChatInterfaceProps {
   onGameEnd?: (result: GameAttemptResult) => void;
   timeLimit?: number;
   stakeAmount?: string;
+  mockMode?: boolean; // Add mock mode option
 }
 
 export function ChatInterface({
   gameType,
   difficultyLevel,
-  aiProvider = AIProviderType.ZEREPY,
+  aiProvider = AIProviderType.GEMINI, // Default to Gemini
   personalityId,
   onGameEnd,
   timeLimit = 300, // 5 minutes default
-  stakeAmount = "0.1"
+  stakeAmount = "0.1",
+  mockMode: initialMockMode = false // Rename to initialMockMode
 }: ChatInterfaceProps) {
-  const { isConnected, callMethod } = useWallet();
+  const { isConnected, address } = useWallet();
   const [chatHistory, setChatHistory] = useState<AIMessage[]>([]);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -55,29 +68,28 @@ export function ChatInterface({
   const [gameSessionId, setGameSessionId] = useState<string | null>(null);
   const [gameSecretPhrase, setGameSecretPhrase] = useState<string | null>(null);
   const [transactionInProgress, setTransactionInProgress] = useState(false);
-  const [matchId, setMatchId] = useState<number | null>(null);
+  const [battleId, setBattleId] = useState<number | null>(null);
+  const [mockMode, setMockMode] = useState(initialMockMode); // Use initialMockMode as initial value
   const chatContainerRef = useRef<HTMLDivElement>(null);
   
   // Get string representation of game type
   const gameTypeString = GameType[gameType];
 
-  // Map game type to valid contract modes (battle, love, mystery)
-  function mapGameTypeToContractMode(type: GameType): string {
-    switch (type) {
-      case GameType.BATTLE:
-        return "battle";
-      case GameType.LOVE:
-        return "love";
-      case GameType.MYSTERY:
-        return "mystery";
-      // Default to battle for other game types
+  // Convert difficulty level to contract difficulty (1-10 scale)
+  function getDifficultyValue(difficulty: DifficultyLevel): number {
+    switch (difficulty) {
+      case DifficultyLevel.EASY:
+        return 3;
+      case DifficultyLevel.MEDIUM:
+        return 5;
+      case DifficultyLevel.HARD:
+        return 7;
+      case DifficultyLevel.EXPERT:
+        return 10;
       default:
-        return "battle";
+        return 5;
     }
   }
-
-  // Get the contract address from the configuration
-  const contractAddress = chainSelector.getActiveChain().predictionMarketContract;
   
   // Get maximum attempts based on difficulty
   function getDifficultyAttempts(difficulty: DifficultyLevel): number {
@@ -118,6 +130,7 @@ export function ChatInterface({
     const initChat = async () => {
       try {
         setIsInitializing(true);
+        setError(null);
         
         // Create game service instance
         const gameService = AIServiceFactory.createGameService(aiProvider);
@@ -147,55 +160,201 @@ export function ChatInterface({
         
         setChatHistory(result.chatHistory as AIMessage[]);
         
-        // Submit transaction for staking
-        if (isConnected && parseFloat(stakeAmount) > 0) {
+        // If wallet is connected and not in mock mode, create a battle
+        if (isConnected && parseFloat(stakeAmount) > 0 && !mockMode) {
           try {
             setTransactionInProgress(true);
             
-            // Call BaultroGames contract to create a match
-            // Using createMatch(address opponentId, string gameMode)
-            const txResult = await callMethod(
-              "createMatch",
-              ["0x0000000000000000000000000000000000000000", mapGameTypeToContractMode(gameType)],
-              toWei(stakeAmount),
-              "gameModesContract" // Use the contract name to get the correct ABI
-            ) as TransactionResult;
+            // Convert stake amount to wei (the smallest unit)
+            const stakeAmountWei = toWei(stakeAmount);
             
-            if (txResult.success) {
-              // Show success toast with Sonner
-              toast.success(`Successfully staked ${stakeAmount} S for this game.`);
+            // Get difficulty as uint16 (contract expects uint16)
+            const difficultyValue = getDifficultyValue(difficultyLevel);
+            console.log(`Attempting to create battle with difficulty ${difficultyValue} and stake ${stakeAmount} (${stakeAmountWei.toString()} wei)`);
+            
+            // Get chain configuration
+            const currentChain = chainSelector.getActiveChain();
+            const gameModesAddress = chainSelector.getGameModesAddress();
+            
+            // Create wallet client
+            const walletClient = createWalletClient({
+              chain: {
+                id: currentChain.chainId,
+                name: currentChain.name,
+                rpcUrls: {
+                  default: { http: [currentChain.rpcUrl] },
+                  public: { http: [currentChain.rpcUrl] }
+                },
+                nativeCurrency: currentChain.nativeCurrency
+              },
+              transport: custom(window.ethereum as unknown as EthereumProvider)
+            });
+            
+            // Create public client
+            const publicClient = createPublicClient({
+              chain: {
+                id: currentChain.chainId,
+                name: currentChain.name,
+                rpcUrls: {
+                  default: { http: [currentChain.rpcUrl] },
+                  public: { http: [currentChain.rpcUrl] }
+                },
+                nativeCurrency: currentChain.nativeCurrency
+              },
+              transport: http(currentChain.rpcUrl)
+            });
+            
+            try {
+              // Simulate the transaction first
+              console.log("Simulating createBattle transaction with:", {
+                address: gameModesAddress,
+                functionName: 'createBattle',
+                args: [difficultyValue],
+                value: stakeAmountWei.toString()
+              });
               
-              // Store the match ID for future reference (if available)
-              // Note: In a production app, you'd want to get the actual match ID from the transaction events
-              setMatchId(Date.now());
-            } else {
-              console.error("Transaction failed:", txResult.status);
-              toast.error(`Transaction failed: ${txResult.status || "Unknown error"}`);
+              try {
+                await publicClient.simulateContract({
+                  address: gameModesAddress as `0x${string}`,
+                  abi: baultroGamesAbi.abi,
+                  functionName: 'createBattle',
+                  args: [difficultyValue],
+                  account: address as `0x${string}`,
+                  value: BigInt(stakeAmountWei.toString())
+                });
+              } catch (simError) {
+                console.error("Simulation error details:", simError);
+                // Check if we can get more details about the revert reason
+                if (simError instanceof Error) {
+                  const errorMessage = simError.message;
+                  console.log("Error message:", errorMessage);
+                  
+                  // Try to extract revert reason if available
+                  const revertMatch = errorMessage.match(/reverted: ([^"]+)/);
+                  if (revertMatch && revertMatch[1]) {
+                    console.log("Revert reason:", revertMatch[1]);
+                    throw new Error(`Contract reverted: ${revertMatch[1]}`);
+                  }
+                }
+                throw simError;
+              }
+              
+              // If simulation succeeds, send the transaction
+              console.log("Simulation successful, sending transaction");
+              const hash = await walletClient.writeContract({
+                address: gameModesAddress as `0x${string}`,
+                abi: baultroGamesAbi.abi,
+                functionName: 'createBattle',
+                args: [difficultyValue],
+                account: address as `0x${string}`,
+                value: BigInt(stakeAmountWei.toString())
+              });
+              
+              console.log("Transaction sent with hash:", hash);
+              
+              // Wait for transaction receipt
+              const receipt = await publicClient.waitForTransactionReceipt({ hash });
+              console.log("Transaction receipt:", receipt);
+              
+              if (receipt.status === 'success') {
+                // Show success toast
+                toast.success(`Successfully staked ${stakeAmount} CORE for this game.`);
+                
+                // Try to extract battle ID from logs
+                const battleCreatedEvents = receipt.logs
+                  .filter(log => log.address.toLowerCase() === gameModesAddress.toLowerCase())
+                  .map(log => {
+                    try {
+                      // Use the imported decodeEventLog function instead of the method on publicClient
+                      const decoded = decodeEventLog({
+                        abi: baultroGamesAbi.abi,
+                        data: log.data,
+                        topics: log.topics,
+                      });
+                      console.log("Decoded event:", decoded);
+                      return decoded;
+                    } catch (decodeError) {
+                      console.error("Failed to decode event log:", decodeError);
+                      return null;
+                    }
+                  })
+                  .filter(event => event && event.eventName === 'BattleCreated');
+                
+                console.log("Battle created events:", battleCreatedEvents);
+                
+                if (battleCreatedEvents.length > 0 && 
+                    battleCreatedEvents[0] && 
+                    'args' in battleCreatedEvents[0] && 
+                    battleCreatedEvents[0].args && 
+                    'battleId' in battleCreatedEvents[0].args) {
+                  const newBattleId = Number(battleCreatedEvents[0].args.battleId);
+                  setBattleId(newBattleId);
+                  console.log(`Battle created with ID: ${newBattleId}`);
+                } else {
+                  // If no event found, use timestamp as fallback
+                  setBattleId(Date.now());
+                  console.log(`No battle ID found in events, using timestamp: ${Date.now()}`);
+                }
+              } else {
+                throw new Error("Transaction failed");
+              }
+            } catch (error) {
+              console.error("Transaction error:", error);
+              
+              // Provide more specific error message based on the error
+              let errorMessage = "Transaction failed: Unknown error";
+              
+              if (error instanceof Error) {
+                errorMessage = `Transaction failed: ${error.message}`;
+                
+                if (error.message.includes("execution reverted")) {
+                  errorMessage = "Transaction failed: The contract rejected the transaction. This might be due to incorrect parameters or insufficient funds. Switching to mock mode.";
+                  // Automatically switch to mock mode when transaction fails
+                  setMockMode(true);
+                  // Create a mock battle ID
+                  setBattleId(Date.now());
+                  toast.info("Switched to mock mode due to transaction failure.");
+                } else if (error.message.includes("user rejected")) {
+                  errorMessage = "Transaction was rejected by user";
+                } else if (error.message.includes("insufficient funds")) {
+                  errorMessage = "Insufficient balance. Please make sure you have enough CORE tokens.";
+                  setMockMode(true);
+                  setBattleId(Date.now());
+                  toast.info("Switched to mock mode due to insufficient funds.");
+                }
+              }
+              
+              toast.error(errorMessage);
+              
+              // Always fall back to mock mode on any contract error
+              if (!mockMode) {
+                setMockMode(true);
+                setBattleId(Date.now());
+                toast.info("Switched to mock mode due to contract interaction issues.");
+              }
             }
-          } catch (err) {
-            console.error("Error staking for game:", err);
-            setError("Failed to stake tokens. The game will continue but without rewards.");
-            
-            // Show error toast with Sonner
-            toast.error("Failed to stake tokens. The game will continue but without rewards.");
+          } catch (error) {
+            console.error("Failed to create battle:", error);
+            toast.error("Failed to create battle. Switching to mock mode.");
+            setMockMode(true);
           } finally {
             setTransactionInProgress(false);
           }
+        } else if (mockMode || !isConnected) {
+          // In mock mode, just create a fake battle ID
+          setBattleId(Date.now());
+          console.log(`Created mock battle with ID: ${Date.now()}`);
         }
-        
-      } catch (err) {
-        console.error("Error initializing chat:", err);
+      } catch (error) {
+        console.error("Failed to initialize chat:", error);
         setError("Failed to initialize chat. Please try again.");
-        
-        // Show error toast with Sonner
-        toast.error("Failed to initialize chat. Please try again.");
       } finally {
         setIsInitializing(false);
       }
     };
-    
+
     initChat();
-  }, [gameTypeString, personalityId, aiProvider, difficultyLevel, stakeAmount, isConnected, callMethod, gameType, gameSecretPhrase, contractAddress]);
+  }, [gameType, difficultyLevel, aiProvider, personalityId, isConnected, stakeAmount, initialMockMode, address]);
   
   // Helper for converting difficulty to string
   function getDifficultyString(difficulty: DifficultyLevel): string {
@@ -349,46 +508,109 @@ export function ChatInterface({
         if (onGameEnd) {
           onGameEnd({
             success: true,
-            score: getScoreForSuccess(difficultyLevel, attempts, timeTaken),
+            score: calculateScore(difficultyLevel, attempts, timeTaken),
             attempts: attempts,
             maxAttempts: maxAttempts,
             timeElapsed: timeTaken,
             feedback: getSuccessFeedback(gameType),
-            reward: `${reward} S`,
+            reward: `${reward} CORE`,
             gameSessionId: gameSessionId || undefined
           });
         }
         
-        // Submit transaction for claiming reward if connected
-        if (isConnected && matchId !== null) {
+        // Submit transaction for resolving battle if connected and not in mock mode
+        if (isConnected && battleId !== null && !mockMode) {
           try {
             setTransactionInProgress(true);
             
-            // Call BaultroGames contract to end the match
-            // Using endMatch(uint64 matchId, address winnerId, string verificationHash)
-            const txResult = await callMethod(
-              "endMatch", 
-              [BigInt(matchId), "0x0000000000000000000000000000000000000000", gameSessionId || "game-verification"], 
-              "0",
-              "gameModesContract" // Use the contract name to get the correct ABI
-            ) as TransactionResult;
+            console.log(`Resolving battle with ID: ${battleId}, success: true`);
             
-            if (txResult.success) {
-              // Show reward toast with Sonner
-              toast.success(`You've earned ${reward} S as a reward!`);
-            } else {
-              console.error("Transaction failed:", txResult.status);
-              toast.error(`Transaction failed: ${txResult.status || "Unknown error"}`);
+            // Get chain configuration
+            const currentChain = chainSelector.getActiveChain();
+            const gameModesAddress = chainSelector.getGameModesAddress();
+            
+            // Create wallet client
+            const walletClient = createWalletClient({
+              chain: {
+                id: currentChain.chainId,
+                name: currentChain.name,
+                rpcUrls: {
+                  default: { http: [currentChain.rpcUrl] },
+                  public: { http: [currentChain.rpcUrl] }
+                },
+                nativeCurrency: currentChain.nativeCurrency
+              },
+              transport: custom(window.ethereum as unknown as EthereumProvider)
+            });
+            
+            // Create public client
+            const publicClient = createPublicClient({
+              chain: {
+                id: currentChain.chainId,
+                name: currentChain.name,
+                rpcUrls: {
+                  default: { http: [currentChain.rpcUrl] },
+                  public: { http: [currentChain.rpcUrl] }
+                },
+                nativeCurrency: currentChain.nativeCurrency
+              },
+              transport: http(currentChain.rpcUrl)
+            });
+            
+            try {
+              // Simulate the transaction first
+              await publicClient.simulateContract({
+                address: gameModesAddress as `0x${string}`,
+                abi: baultroGamesAbi.abi,
+                functionName: 'resolveBattle',
+                args: [BigInt(battleId), true],
+                account: address as `0x${string}`
+              });
+              
+              // If simulation succeeds, send the transaction
+              const hash = await walletClient.writeContract({
+                address: gameModesAddress as `0x${string}`,
+                abi: baultroGamesAbi.abi,
+                functionName: 'resolveBattle',
+                args: [BigInt(battleId), true],
+                account: address as `0x${string}`
+              });
+              
+              // Wait for transaction receipt
+              const receipt = await publicClient.waitForTransactionReceipt({ hash });
+              
+              if (receipt.status === 'success') {
+                // Show reward toast with Sonner
+                toast.success(`You've earned ${reward} CORE as a reward!`);
+              } else {
+                throw new Error("Transaction failed");
+              }
+            } catch (error) {
+              console.error("Transaction error:", error);
+              
+              // Provide more specific error message based on the error
+              let errorMessage = "Failed to claim reward";
+              
+              if (error instanceof Error) {
+                if (error.message.includes("execution reverted")) {
+                  errorMessage = "Failed to claim reward: The contract rejected the transaction.";
+                } else if (error.message.includes("user rejected")) {
+                  errorMessage = "Transaction was rejected by user";
+                }
+              }
+              
+              toast.error(errorMessage);
             }
-          } catch (err) {
-            console.error("Error claiming reward:", err);
+          } catch (error) {
+            console.error("Error claiming reward:", error);
             setError("Failed to claim reward. Please try again later.");
-            
-            // Show error toast with Sonner
             toast.error("Failed to claim reward. Please try again later.");
           } finally {
             setTransactionInProgress(false);
           }
+        } else if (mockMode && battleId !== null) {
+          // In mock mode, show a success message without making a transaction
+          toast.success(`Mock mode: You've earned ${reward} CORE as a reward!`);
         }
       } else {
         // Increment attempts
@@ -411,6 +633,100 @@ export function ChatInterface({
               feedback: "You've reached the maximum number of attempts.",
               gameSessionId: gameSessionId || undefined
             });
+          }
+          
+          // If connected and battle was created and not in mock mode, resolve as failure
+          if (isConnected && battleId !== null && !mockMode) {
+            try {
+              setTransactionInProgress(true);
+              
+              console.log(`Resolving battle with ID: ${battleId}, success: false`);
+              
+              // Get chain configuration
+              const currentChain = chainSelector.getActiveChain();
+              const gameModesAddress = chainSelector.getGameModesAddress();
+              
+              // Create wallet client
+              const walletClient = createWalletClient({
+                chain: {
+                  id: currentChain.chainId,
+                  name: currentChain.name,
+                  rpcUrls: {
+                    default: { http: [currentChain.rpcUrl] },
+                    public: { http: [currentChain.rpcUrl] }
+                  },
+                  nativeCurrency: currentChain.nativeCurrency
+                },
+                transport: custom(window.ethereum as unknown as EthereumProvider)
+              });
+              
+              // Create public client
+              const publicClient = createPublicClient({
+                chain: {
+                  id: currentChain.chainId,
+                  name: currentChain.name,
+                  rpcUrls: {
+                    default: { http: [currentChain.rpcUrl] },
+                    public: { http: [currentChain.rpcUrl] }
+                  },
+                  nativeCurrency: currentChain.nativeCurrency
+                },
+                transport: http(currentChain.rpcUrl)
+              });
+              
+              try {
+                // Simulate the transaction first
+                await publicClient.simulateContract({
+                  address: gameModesAddress as `0x${string}`,
+                  abi: baultroGamesAbi.abi,
+                  functionName: 'resolveBattle',
+                  args: [BigInt(battleId), false],
+                  account: address as `0x${string}`
+                });
+                
+                // If simulation succeeds, send the transaction
+                const hash = await walletClient.writeContract({
+                  address: gameModesAddress as `0x${string}`,
+                  abi: baultroGamesAbi.abi,
+                  functionName: 'resolveBattle',
+                  args: [BigInt(battleId), false],
+                  account: address as `0x${string}`
+                });
+                
+                // Wait for transaction receipt
+                const receipt = await publicClient.waitForTransactionReceipt({ hash });
+                
+                if (receipt.status === 'success') {
+                  toast.info("Battle has been resolved. Better luck next time!");
+                } else {
+                  throw new Error("Transaction failed");
+                }
+              } catch (error) {
+                console.error("Transaction error:", error);
+                
+                // Provide more specific error message based on the error
+                let errorMessage = "Failed to resolve battle";
+                
+                if (error instanceof Error) {
+                  if (error.message.includes("execution reverted")) {
+                    errorMessage = "Failed to resolve battle: The contract rejected the transaction.";
+                  } else if (error.message.includes("user rejected")) {
+                    errorMessage = "Transaction was rejected by user";
+                  }
+                }
+                
+                toast.error(errorMessage);
+              }
+            } catch (error) {
+              console.error("Error resolving battle:", error);
+              setError("Failed to resolve battle. Please try again later.");
+              toast.error("Failed to resolve battle. Please try again later.");
+            } finally {
+              setTransactionInProgress(false);
+            }
+          } else if (mockMode && battleId !== null) {
+            // In mock mode, show a failure message without making a transaction
+            toast.info("Mock mode: Battle has been resolved. Better luck next time!");
           }
         }
       }
@@ -445,7 +761,7 @@ export function ChatInterface({
   }
   
   // Calculate score based on difficulty, attempts, and time
-  function getScoreForSuccess(
+  function calculateScore(
     difficulty: DifficultyLevel, 
     attemptsMade: number, 
     timeTaken: number
@@ -458,18 +774,18 @@ export function ChatInterface({
       [DifficultyLevel.EXPERT]: 500
     }[difficulty] || 100;
     
-    // Attempts multiplier (fewer attempts = higher score)
+    // Attempts bonus (fewer attempts = higher score)
     const maxAttemptsForDifficulty = getDifficultyAttempts(difficulty);
-    const attemptsMultiplier = 1 + ((maxAttemptsForDifficulty - attemptsMade) / maxAttemptsForDifficulty);
+    const attemptsBonus = 1 + ((maxAttemptsForDifficulty - attemptsMade) / maxAttemptsForDifficulty);
     
-    // Time multiplier (faster completion = higher score)
+    // Time bonus (faster completion = higher score)
     const maxTimeForDifficulty = timeLimit;
-    const timeMultiplier = 1 + ((maxTimeForDifficulty - timeTaken) / maxTimeForDifficulty) * 0.5;
+    const timeBonus = 1 + ((maxTimeForDifficulty - timeTaken) / maxTimeForDifficulty);
     
     // Calculate final score
-    const score = Math.round(baseScore * attemptsMultiplier * timeMultiplier);
+    const finalScore = Math.round(baseScore * attemptsBonus * timeBonus);
     
-    return score;
+    return finalScore;
   }
   
   // Handle pressing Enter key to send message
@@ -478,6 +794,130 @@ export function ChatInterface({
       e.preventDefault();
       handleSendMessage();
     }
+  };
+  
+  // Handle game end
+  const handleGameEnd = async (wasSuccessful: boolean) => {
+    if (onGameEnd) {
+      const result: GameAttemptResult = {
+        success: wasSuccessful,
+        score: wasSuccessful ? calculateScore(difficultyLevel, attempts, timeLimit - timeRemaining) : 0,
+        attempts,
+        maxAttempts,
+        timeElapsed: timeLimit - timeRemaining,
+        feedback: wasSuccessful ? getSuccessFeedback(gameType) : "You've reached the maximum number of attempts.",
+        reward: wasSuccessful ? calculateReward(difficultyLevel, attempts) : "0",
+        gameSessionId: gameSessionId || undefined
+      };
+      
+      // If we have a battle ID and not in mock mode, resolve the battle on-chain
+      if (battleId && !mockMode && isConnected) {
+        try {
+          setTransactionInProgress(true);
+          
+          // Get chain configuration
+          const currentChain = chainSelector.getActiveChain();
+          const gameModesAddress = chainSelector.getGameModesAddress();
+          
+          // Create wallet client
+          const walletClient = createWalletClient({
+            chain: {
+              id: currentChain.chainId,
+              name: currentChain.name,
+              rpcUrls: {
+                default: { http: [currentChain.rpcUrl] },
+                public: { http: [currentChain.rpcUrl] }
+              },
+              nativeCurrency: currentChain.nativeCurrency
+            },
+            transport: custom(window.ethereum as unknown as EthereumProvider)
+          });
+          
+          // Create public client
+          const publicClient = createPublicClient({
+            chain: {
+              id: currentChain.chainId,
+              name: currentChain.name,
+              rpcUrls: {
+                default: { http: [currentChain.rpcUrl] },
+                public: { http: [currentChain.rpcUrl] }
+              },
+              nativeCurrency: currentChain.nativeCurrency
+            },
+            transport: http(currentChain.rpcUrl)
+          });
+          
+          try {
+            // Simulate the transaction first
+            await publicClient.simulateContract({
+              address: gameModesAddress as `0x${string}`,
+              abi: baultroGamesAbi.abi,
+              functionName: 'resolveBattle',
+              args: [BigInt(battleId), wasSuccessful],
+              account: address as `0x${string}`
+            });
+            
+            // If simulation succeeds, send the transaction
+            const hash = await walletClient.writeContract({
+              address: gameModesAddress as `0x${string}`,
+              abi: baultroGamesAbi.abi,
+              functionName: 'resolveBattle',
+              args: [BigInt(battleId), wasSuccessful],
+              account: address as `0x${string}`
+            });
+            
+            // Wait for transaction receipt
+            const receipt = await publicClient.waitForTransactionReceipt({ hash });
+            
+            if (receipt.status === 'success') {
+              // Show success toast
+              if (wasSuccessful) {
+                toast.success(`Successfully claimed ${result.reward} CORE reward!`);
+              } else {
+                toast.info("Game result recorded on-chain.");
+              }
+            } else {
+              throw new Error("Transaction failed");
+            }
+          } catch (error) {
+            console.error("Transaction error:", error);
+            
+            // Provide more specific error message based on the error
+            let errorMessage = "Failed to record game result on-chain";
+            
+            if (error instanceof Error) {
+              if (error.message.includes("execution reverted")) {
+                errorMessage = "Failed to record game result: The contract rejected the transaction.";
+              } else if (error.message.includes("user rejected")) {
+                errorMessage = "Transaction was rejected by user";
+              }
+            }
+            
+            toast.error(errorMessage);
+          }
+        } catch (error) {
+          console.error("Failed to resolve battle:", error);
+          toast.error("Failed to record game result on-chain");
+        } finally {
+          setTransactionInProgress(false);
+        }
+      }
+      
+      onGameEnd(result);
+    }
+  };
+  
+  // Handle success
+  const handleSuccess = () => {
+    setSuccess(true);
+    // Call handleGameEnd with success=true
+    handleGameEnd(true);
+  };
+
+  // Handle failure (out of attempts)
+  const handleFailure = () => {
+    // Call handleGameEnd with success=false
+    handleGameEnd(false);
   };
   
   return (
@@ -537,6 +977,13 @@ export function ChatInterface({
         <div className="bg-blue-500/10 text-blue-500 p-2 text-sm flex items-center justify-center border-b">
           <div className="h-3 w-3 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-2"/>
           Processing blockchain transaction...
+        </div>
+      )}
+      
+      {/* Battle ID Display */}
+      {battleId && (
+        <div className="bg-green-500/10 text-green-500 p-2 text-sm flex items-center justify-center border-b">
+          <span className="font-mono">Battle ID: {battleId}</span>
         </div>
       )}
       

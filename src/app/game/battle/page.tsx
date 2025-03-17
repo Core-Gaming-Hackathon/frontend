@@ -15,6 +15,8 @@ export default function BattleModePage() {
     aiProvider: AIProviderType;
     personalityId?: string;
     timeLimit: number;
+    stakeAmount?: string;
+    mockMode?: boolean;
   } | null>(null);
   const [gameResult, setGameResult] = useState<GameAttemptResult | null>(null);
   
@@ -24,6 +26,8 @@ export default function BattleModePage() {
     aiProvider: AIProviderType;
     personalityId?: string;
     timeLimit: number;
+    stakeAmount?: string;
+    mockMode?: boolean;
   }) => {
     setGameConfig(config);
     setGameState('playing');
@@ -67,6 +71,8 @@ export default function BattleModePage() {
               aiProvider={gameConfig.aiProvider}
               personalityId={gameConfig.personalityId}
               timeLimit={gameConfig.timeLimit}
+              stakeAmount={gameConfig.stakeAmount}
+              mockMode={gameConfig.mockMode}
               onGameEnd={handleGameEnd}
             />
           )}

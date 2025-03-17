@@ -15,6 +15,8 @@ export default function LoveModePage() {
     aiProvider: AIProviderType;
     personalityId?: string;
     timeLimit: number;
+    stakeAmount: string;
+    mockMode: boolean;
   } | null>(null);
   const [gameResult, setGameResult] = useState<GameAttemptResult | null>(null);
   
@@ -22,10 +24,16 @@ export default function LoveModePage() {
   const handleGameStart = (config: {
     difficultyLevel: DifficultyLevel;
     aiProvider: AIProviderType;
-    personalityId?: string;
     timeLimit: number;
+    stakeAmount?: string;
+    mockMode?: boolean;
   }) => {
-    setGameConfig(config);
+    setGameConfig({
+      ...config,
+      personalityId: undefined,
+      stakeAmount: config.stakeAmount || "0.1",
+      mockMode: config.mockMode || false
+    });
     setGameState('playing');
   };
   
@@ -67,6 +75,8 @@ export default function LoveModePage() {
               aiProvider={gameConfig.aiProvider}
               personalityId={gameConfig.personalityId}
               timeLimit={gameConfig.timeLimit}
+              stakeAmount={gameConfig.stakeAmount}
+              mockMode={gameConfig.mockMode}
               onGameEnd={handleGameEnd}
             />
           )}

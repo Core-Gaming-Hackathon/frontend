@@ -19,6 +19,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 import { GameModeAssets } from "@/hooks/use-game-form";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { isMockModeEnabled } from "@/utils/mock-data";
+import { useGame } from "@/providers/game-provider";
 
 interface GameConfigProps {
   gameType: GameType;
@@ -26,17 +30,33 @@ interface GameConfigProps {
     difficultyLevel: DifficultyLevel;
     aiProvider: AIProviderType;
     timeLimit: number;
+    stakeAmount?: string;
+    mockMode?: boolean;
+    contractGameId?: string;
+    sessionId?: string;
   }) => void;
 }
 
 export function GameConfig({ gameType, onStart }: GameConfigProps) {
   const { isConnected, signIn } = useWallet();
+  const { createBattle, createRaid, mintDailyNFT, checkNFTEligibility } = useGame();
   const [difficultyLevel, setDifficultyLevel] = useState<DifficultyLevel>(DifficultyLevel.MEDIUM);
   const [aiProvider, setAIProvider] = useState<AIProviderType>(AIProviderType.ZEREPY);
   const [timeLimit, setTimeLimit] = useState<number>(300); // 5 minutes default
+  const [stakeAmount, setStakeAmount] = useState<string>("0.1"); // Default stake amount
+  const [mockMode, setMockMode] = useState<boolean>(true); // Default to mock mode
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [systemInstructions, setSystemInstructions] = useState<string>("");
+  
+  // Check if mock mode is enabled in environment
+  useEffect(() => {
+    const envMockMode = isMockModeEnabled();
+    if (envMockMode) {
+      setMockMode(true);
+      console.log("Mock mode enabled from environment variable");
+    }
+  }, []);
   
   // Get game mode name for display
   const gameTypeName = GameType[gameType];
@@ -126,29 +146,89 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
     try {
       setIsSubmitting(true);
       
-      // If not connected, try to connect wallet first
-      if (!isConnected) {
+      // If not connected and not in mock mode, try to connect wallet first
+      if (!isConnected && !mockMode) {
         try {
           const connected = await signIn();
           if (!connected) {
-            toast.error("Please connect your wallet to start the game");
+            toast.error("Please connect your wallet to start the game or enable mock mode");
             setIsSubmitting(false);
             return;
           }
         } catch (error) {
           console.error("Error connecting wallet:", error);
-          toast.error("Failed to connect wallet. Please try again.");
+          toast.error("Failed to connect wallet. Please try again or enable mock mode.");
           setIsSubmitting(false);
           return;
         }
       }
       
-      // Call the onStart prop with game configuration
-      onStart({
-        difficultyLevel,
-        aiProvider,
-        timeLimit
-      });
+      // Check NFT eligibility if connected and not in mock mode
+      if (isConnected && !mockMode) {
+        try {
+          const isEligible = await checkNFTEligibility();
+          if (isEligible) {
+            // Attempt to mint NFT
+            const mintResult = await mintDailyNFT();
+            if (mintResult) {
+              toast.success("Daily participation NFT minted!");
+            }
+          }
+        } catch (error) {
+          console.error("Error checking NFT eligibility:", error);
+          // Continue with game start even if NFT check fails
+        }
+      }
+      
+      // For non-mock mode, handle blockchain interaction
+      if (!mockMode && isConnected) {
+        let gameSession = null;
+        
+        // Call the appropriate contract method based on game type
+        switch (gameType) {
+          case GameType.BATTLE:
+            gameSession = await createBattle(difficultyLevel, stakeAmount);
+            break;
+          case GameType.RAID:
+            gameSession = await createRaid(difficultyLevel, stakeAmount);
+            break;
+          default:
+            // Other game types handled by onStart directly
+            break;
+        }
+        
+        // If game session was created on blockchain, add its data to the config
+        if (gameSession) {
+          onStart({
+            difficultyLevel,
+            aiProvider,
+            timeLimit,
+            stakeAmount,
+            mockMode,
+            contractGameId: gameSession.contractId,
+            sessionId: gameSession.id
+          });
+        } else {
+          // Just use mock mode if contract interaction failed
+          toast.error("Contract interaction failed, falling back to mock mode");
+          onStart({
+            difficultyLevel,
+            aiProvider,
+            timeLimit,
+            stakeAmount,
+            mockMode: true
+          });
+        }
+      } else {
+        // Just call onStart with config for mock mode
+        onStart({
+          difficultyLevel,
+          aiProvider,
+          timeLimit,
+          stakeAmount,
+          mockMode
+        });
+      }
       
       toast.success("Game started! Get ready to play!");
     } catch (error) {
@@ -245,6 +325,32 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          
+          <div>
+            <Label className="text-sm font-medium mb-1 block">
+              Stake Amount (CORE)
+            </Label>
+            <Input
+              type="number"
+              value={stakeAmount}
+              onChange={(e) => setStakeAmount(e.target.value)}
+              min="0"
+              step="0.01"
+              placeholder="Enter stake amount"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Amount of CORE to stake for this game
+            </p>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="mock-mode"
+              checked={mockMode}
+              onCheckedChange={setMockMode}
+            />
+            <Label htmlFor="mock-mode">Mock Mode (No blockchain transactions)</Label>
           </div>
           
           {/* Advanced Settings Toggle */}

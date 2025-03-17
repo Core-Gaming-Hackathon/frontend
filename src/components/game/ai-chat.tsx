@@ -14,6 +14,8 @@ interface AIChatProps {
   difficulty?: string;
   personalityId?: string;
   secretPhrase?: string;
+  stakeAmount?: string;
+  mockMode?: boolean;
   onSuccess?: () => void;
 }
 
@@ -22,6 +24,8 @@ export default function AIChat({
   difficulty = 'medium',
   personalityId,
   secretPhrase,
+  stakeAmount = '0.1',
+  mockMode = false,
   onSuccess
 }: AIChatProps) {
   // State for chat messages and input
@@ -35,7 +39,7 @@ export default function AIChat({
   // Initialize chat when component mounts
   useEffect(() => {
     initializeChat();
-  }, [gameType, difficulty, personalityId, secretPhrase]);
+  }, [gameType, difficulty, personalityId, secretPhrase, stakeAmount, mockMode]);
 
   // Scroll to bottom of chat when messages change
   useEffect(() => {
@@ -56,6 +60,8 @@ export default function AIChat({
           difficulty,
           personalityId,
           secretPhrase,
+          stakeAmount,
+          mockMode,
         }),
       });
 
@@ -102,6 +108,8 @@ export default function AIChat({
           difficulty,
           personalityId,
           secretPhrase,
+          stakeAmount,
+          mockMode,
         }),
       });
 

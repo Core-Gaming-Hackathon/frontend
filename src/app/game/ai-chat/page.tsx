@@ -8,10 +8,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/use-toast';
+import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 
 export default function AIGamePage() {
   const [gameType, setGameType] = useState<GameType>(GameType.BATTLE);
   const [difficulty, setDifficulty] = useState('medium');
+  const [stakeAmount, setStakeAmount] = useState('0.1');
+  const [mockMode, setMockMode] = useState(false);
   const { toast } = useToast();
 
   const handleSuccess = () => {
@@ -64,23 +68,46 @@ export default function AIGamePage() {
         
         <Card>
           <CardHeader>
-            <CardTitle>Difficulty</CardTitle>
-            <CardDescription>Set the challenge difficulty</CardDescription>
+            <CardTitle>Game Settings</CardTitle>
+            <CardDescription>Configure your game</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Select 
-              defaultValue="medium"
-              onValueChange={(value) => setDifficulty(value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select difficulty" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="easy">Easy</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="hard">Hard</SelectItem>
-              </SelectContent>
-            </Select>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="difficulty">Difficulty</Label>
+              <Select 
+                defaultValue="medium"
+                onValueChange={(value) => setDifficulty(value)}
+              >
+                <SelectTrigger id="difficulty">
+                  <SelectValue placeholder="Select difficulty" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="easy">Easy</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="hard">Hard</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="stakeAmount">Stake Amount (CORE)</Label>
+              <Input
+                id="stakeAmount"
+                type="text"
+                value={stakeAmount}
+                onChange={(e) => setStakeAmount(e.target.value)}
+                placeholder="0.1"
+              />
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <Switch
+                id="mockMode"
+                checked={mockMode}
+                onCheckedChange={setMockMode}
+              />
+              <Label htmlFor="mockMode">Mock Mode (No blockchain transactions)</Label>
+            </div>
           </CardContent>
         </Card>
         
@@ -112,6 +139,8 @@ export default function AIGamePage() {
         <AIChat 
           gameType={gameType}
           difficulty={difficulty}
+          stakeAmount={stakeAmount}
+          mockMode={mockMode}
           onSuccess={handleSuccess}
         />
       </div>

@@ -19,7 +19,7 @@ export const CHAIN_CONFIGS = {
       decimals: 18
     },
     predictionMarketContract: "0xC44DE09ab7eEFC2a9a2116E04ca1fcEc86F520fF",
-    gameModesContract: "0x93012953008ef9AbcB71F48C340166E8f384e985", // Updated with BaultroGames address
+    gameModesContract: "0xf5250dD966e3ef10bbBb08878AdBB063d3879B57" // Updated BaultroGames address
   }
 } as const;
 

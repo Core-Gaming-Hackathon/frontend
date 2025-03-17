@@ -4,7 +4,7 @@ import { GameType } from '@/shared/schemas/game/types';
 
 export async function POST(request: NextRequest) {
   try {
-    const { gameType, difficulty, personalityId, secretPhrase } = await request.json();
+    const { gameType, difficulty, personalityId, secretPhrase, stakeAmount, mockMode } = await request.json();
     
     // Validate game type
     let validGameType: GameType | string = GameType.BATTLE;
@@ -25,7 +25,9 @@ export async function POST(request: NextRequest) {
       validGameType,
       personalityId,
       difficulty || 'medium',
-      secretPhrase
+      secretPhrase,
+      stakeAmount || '0.1',
+      mockMode || false
     );
     
     return NextResponse.json(result);

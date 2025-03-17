@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { NFTStatus } from "@/components/game/NFTStatus";
 
 export default function GameModesPage() {
   return (
@@ -11,6 +12,11 @@ export default function GameModesPage() {
           Choose from multiple AI-powered game modes, each offering unique
           challenges and rewards.
         </p>
+      </div>
+      
+      {/* NFT Status Section */}
+      <div className="max-w-md mx-auto mb-12">
+        <NFTStatus />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-5xl mx-auto">

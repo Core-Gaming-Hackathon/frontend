@@ -18,6 +18,7 @@ export type TransactionResult = {
   status: string;
   success?: boolean;
   errorMessage?: string;
+  data?: unknown;
 };
 
 // Custom type for ethereum provider that matches window.ethereum
@@ -41,7 +42,7 @@ interface EVMWalletInterface {
     abi: Abi,
     methodName: string,
     args?: unknown[],
-    value?: bigint
+    value?: bigint | string
   ): Promise<TransactionResult>;
   cleanup(): void;
 }
@@ -337,7 +338,7 @@ class EVMWallet implements EVMWalletInterface {
     abi: Abi,
     methodName: string,
     args: unknown[] = [],
-    value?: bigint
+    value?: bigint | string
   ): Promise<TransactionResult> {
     try {
       if (!this.walletClient || !this.publicClient) {
@@ -348,6 +349,9 @@ class EVMWallet implements EVMWalletInterface {
         throw new Error("Wallet not connected");
       }
 
+      // Convert value to BigInt if it's a string
+      const valueBigInt = typeof value === 'string' ? BigInt(value) : value;
+
       const currentChain = chainSelector.getActiveChain();
       
       // Verify we're on Core testnet
@@ -356,7 +360,11 @@ class EVMWallet implements EVMWalletInterface {
       }
 
       // Verify contract address matches expected
-      if (contractAddress.toLowerCase() !== chainSelector.getPredictionMarketAddress().toLowerCase()) {
+      const predictionMarketAddress = chainSelector.getPredictionMarketAddress().toLowerCase();
+      const gameModesAddress = chainSelector.getGameModesAddress().toLowerCase();
+      
+      if (contractAddress.toLowerCase() !== predictionMarketAddress && 
+          contractAddress.toLowerCase() !== gameModesAddress) {
         throw new Error("Invalid contract address for Core testnet");
       }
 
@@ -368,7 +376,7 @@ class EVMWallet implements EVMWalletInterface {
           functionName: methodName,
           args,
           account: this.address as `0x${string}`,
-          value: value || undefined,
+          value: valueBigInt,
         });
       } catch (simError) {
         // Enhanced simulation error handling
@@ -395,14 +403,14 @@ class EVMWallet implements EVMWalletInterface {
               http: [currentChain.rpcUrl],
             }
           },
-          nativeCurrency: currentChain.nativeCurrency,
-        } as Chain,
+          nativeCurrency: currentChain.nativeCurrency
+        },
         address: contractAddress as `0x${string}`,
         abi,
         functionName: methodName,
         args,
         account: this.address as `0x${string}`,
-        value: value || undefined,
+        value: valueBigInt,
       });
 
       // Wait for the transaction with timeout

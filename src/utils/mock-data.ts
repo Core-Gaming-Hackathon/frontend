@@ -58,7 +58,8 @@ export function generateMockPredictions(count = 10): Prediction[] {
  * @returns True if mock mode is enabled
  */
 export function isMockModeEnabled(): boolean {
-  return process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'true';
+  // Force mock mode to be enabled for now due to contract issues
+  return true; // process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'true';
 }
 
 // Helper functions for generating random data

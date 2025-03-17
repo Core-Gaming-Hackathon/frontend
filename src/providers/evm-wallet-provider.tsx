@@ -24,14 +24,17 @@ interface EVMWalletContextType {
     args?: unknown[],
     value?: string,
     contractAddress?: string
-  ) => Promise<{
-    hash: string;
-    status: string;
-    success: boolean;
-    data?: unknown;
-  }>;
+  ) => Promise<TransactionResult>;
   signIn: () => Promise<boolean>;
   signOut: () => Promise<boolean>;
+}
+
+// Define transaction result interface
+interface TransactionResult {
+  hash: string;
+  status: string;
+  success: boolean;
+  data?: unknown;
 }
 
 // Create context
@@ -180,7 +183,7 @@ export function EVMWalletProvider({ children }: { children: React.ReactNode }) {
     args: unknown[] = [],
     value: string = "0",
     contractName: string = "predictionMarket"
-  ): Promise<{ hash: string; status: string; success: boolean; data?: unknown }> => {
+  ): Promise<TransactionResult> => {
     try {
       if (!isConnected) {
         // Don't show toast for wallet connection errors - let the calling code handle it
@@ -229,7 +232,7 @@ export function EVMWalletProvider({ children }: { children: React.ReactNode }) {
           getContractAbi(contractName),
           methodName,
           args,
-          BigInt(value)
+          value ? BigInt(value) : undefined
         );
 
         // Only show success toast for state-changing methods
@@ -239,11 +242,12 @@ export function EVMWalletProvider({ children }: { children: React.ReactNode }) {
           toast.error("Transaction failed");
         }
 
-        // Return the result (without data for state-changing methods)
+        // Return the result (with data for state-changing methods)
         return {
           hash: result.hash || "",
           status: result.status || "",
-          success: result.success ?? false
+          success: result.success ?? false,
+          data: result.data
         };
       }
     } catch (error) {
@@ -294,7 +298,7 @@ export function EVMWalletProvider({ children }: { children: React.ReactNode }) {
     if (contractName?.startsWith('0x') && contractName?.length === 42) {
       // Verify it's one of our known contracts
       if (contractName.toLowerCase() === config.predictionMarketContract.toLowerCase() ||
-          contractName.toLowerCase() === config.gameModesContract.toLowerCase()) {
+          (config.gameModesContract && contractName.toLowerCase() === config.gameModesContract.toLowerCase())) {
         return contractName;
       }
       throw new Error(`Invalid contract address: ${contractName}`);
@@ -304,7 +308,14 @@ export function EVMWalletProvider({ children }: { children: React.ReactNode }) {
     if (!contractName || contractName.toLowerCase() === "predictionmarket") {
       return config.predictionMarketContract;
     }
-    if (contractName.toLowerCase() === "gamemodes") {
+    
+    // Handle different variations of the game modes contract name
+    if (contractName.toLowerCase() === "gamemodescontract" || 
+        contractName.toLowerCase() === "gamemodes" || 
+        contractName.toLowerCase() === "baultrogames") {
+      if (!config.gameModesContract) {
+        throw new Error("Game modes contract address not configured");
+      }
       return config.gameModesContract;
     }
 

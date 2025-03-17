@@ -38,7 +38,9 @@ export class GeminiGameService {
     gameType: GameType | string,
     personalityId?: string,
     difficulty: string = "medium",
-    secretPhrase?: string
+    secretPhrase?: string,
+    stakeAmount: string = "0.1",
+    mockMode: boolean = false
   ): Promise<{
     chatHistory: AIMessage[];
     sessionId?: string;
@@ -47,9 +49,15 @@ export class GeminiGameService {
     const gameTypeName = this.normalizeGameType(gameType);
     
     console.log(`Initializing ${gameTypeName} mode chat...`);
+    console.log(`Game settings: difficulty=${difficulty}, stakeAmount=${stakeAmount}, mockMode=${mockMode}`);
     
     // Get the system prompt based on game type and difficulty
     const systemPrompt = this.getSystemPrompt(gameTypeName, difficulty, secretPhrase);
+    
+    // Add information about stake amount and mock mode to the system prompt
+    const enhancedSystemPrompt = mockMode 
+      ? `${systemPrompt}\n\nThis is a mock game session with no real blockchain transactions. Stake amount: ${stakeAmount} CORE (simulated).`
+      : `${systemPrompt}\n\nThis is a real game session with blockchain transactions. Stake amount: ${stakeAmount} CORE.`;
     
     // Update the provider with the appropriate system prompt and temperature
     this.provider.updateConfig(
@@ -57,7 +65,7 @@ export class GeminiGameService {
         temperature: this.getTemperatureForGameType(gameTypeName),
         maxOutputTokens: 1024
       },
-      systemPrompt
+      enhancedSystemPrompt
     );
     
     // Get the initial AI message based on game type
@@ -66,7 +74,7 @@ export class GeminiGameService {
     try {
       // Create initial chat history
       const chatHistory: AIMessage[] = [
-        { role: 'system' as const, content: systemPrompt },
+        { role: 'system' as const, content: enhancedSystemPrompt },
         { role: 'assistant' as const, content: initialMessage }
       ];
       
@@ -263,7 +271,7 @@ FEEDBACK: [brief explanation of evaluation]
       // Parse the evaluation result
       const successMatch = evaluationResult.match(/SUCCESS:\s*(true|false)/i);
       const scoreMatch = evaluationResult.match(/SCORE:\s*(\d+)/i);
-      const feedbackMatch = evaluationResult.match(/FEEDBACK:\s*(.+?)(?:\n|$)/is);
+      const feedbackMatch = evaluationResult.match(/FEEDBACK:\s*(.+?)(?:\n|$)/i);
       
       const success = successMatch ? successMatch[1].toLowerCase() === 'true' : false;
       const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0;
@@ -294,17 +302,26 @@ FEEDBACK: [brief explanation of evaluation]
     let difficultyLevel: string;
     switch (difficulty.toLowerCase()) {
       case 'easy':
-        difficultyLevel = 'EASY';
+        difficultyLevel = 'easy';
         break;
       case 'hard':
-        difficultyLevel = 'HARD';
+        difficultyLevel = 'hard';
+        break;
+      case 'expert':
+        difficultyLevel = 'expert';
         break;
       default:
-        difficultyLevel = 'MEDIUM';
+        difficultyLevel = 'medium';
     }
     
+    // Convert gameType to lowercase for accessing systemPrompts
+    const gameTypeLower = gameType.toLowerCase() as 'battle' | 'love' | 'mystery' | 'raid';
+    
+    // Ensure difficultyLevel is properly typed
+    const typedDifficultyLevel = difficultyLevel as 'easy' | 'medium' | 'hard' | 'expert';
+    
     // Get base prompt from system prompts
-    const basePrompt = systemPrompts[gameType]?.[difficultyLevel] || systemPrompts.BATTLE.MEDIUM;
+    const basePrompt = systemPrompts[gameTypeLower]?.[typedDifficultyLevel] || systemPrompts.battle.medium;
     
     // Add secret phrase if provided (for mystery mode)
     if (gameType === 'MYSTERY' && secretPhrase) {
