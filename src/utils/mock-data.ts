@@ -58,8 +58,14 @@ export function generateMockPredictions(count = 10): Prediction[] {
  * @returns True if mock mode is enabled
  */
 export function isMockModeEnabled(): boolean {
-  // Force mock mode to be enabled for now due to contract issues
-  return true; // process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'true';
+  // Debug log the actual environment variable value
+  const rawValue = process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE;
+  const result = rawValue === 'true';
+  
+  console.log(`[MockMode Debug] NEXT_PUBLIC_ENABLE_MOCK_MODE=${rawValue} (${typeof rawValue}), returning: ${result}`);
+  
+  // Properly check the environment variable without hardcoding
+  return result;
 }
 
 // Helper functions for generating random data

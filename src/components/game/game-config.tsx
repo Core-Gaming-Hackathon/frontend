@@ -12,7 +12,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { AIProviderType } from "@/lib/ai-service-factory";
-import { useWallet } from "@/providers/evm-wallet-provider";
+import { useWallet } from "@/hooks/use-wallet";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -23,6 +23,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { isMockModeEnabled } from "@/utils/mock-data";
 import { useGame } from "@/providers/game-provider";
+import { Checkbox } from "@/components/ui/checkbox";
+import { GameConfig as GameConfigType } from "@/types/game";
 
 interface GameConfigProps {
   gameType: GameType;
@@ -44,19 +46,13 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
   const [aiProvider, setAIProvider] = useState<AIProviderType>(AIProviderType.ZEREPY);
   const [timeLimit, setTimeLimit] = useState<number>(300); // 5 minutes default
   const [stakeAmount, setStakeAmount] = useState<string>("0.1"); // Default stake amount
-  const [mockMode, setMockMode] = useState<boolean>(true); // Default to mock mode
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [systemInstructions, setSystemInstructions] = useState<string>("");
   
-  // Check if mock mode is enabled in environment
-  useEffect(() => {
-    const envMockMode = isMockModeEnabled();
-    if (envMockMode) {
-      setMockMode(true);
-      console.log("Mock mode enabled from environment variable");
-    }
-  }, []);
+  // Read mock mode from environment, don't default to true
+  const envMockMode = process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'true';
+  const [mockMode, setMockMode] = useState(envMockMode);
   
   // Get game mode name for display
   const gameTypeName = GameType[gameType];
@@ -238,6 +234,11 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
       setIsSubmitting(false);
     }
   };
+  
+  // Debug log for mock mode state
+  useEffect(() => {
+    console.log(`[GameConfig] Mock mode state: ${mockMode}, env value: ${process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE}`);
+  }, [mockMode]);
   
   return (
     <Card className={`rounded-lg overflow-hidden border shadow-lg bg-gradient-to-br ${bgColor}`}>

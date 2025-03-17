@@ -14,30 +14,38 @@ import { GoogleGenerativeAI, GenerativeModel, GenerationConfig, Content, Part } 
 let genAI: GoogleGenerativeAI | null = null;
 let isConfigValid = false;
 
-// Only initialize on the server
-if (typeof window === 'undefined') {
-  try {
-    // Get API key from environment variable
-    const apiKey = process.env.GEMINI_API_KEY || '';
-    
-    if (apiKey && apiKey !== 'your_gemini_api_key_here') {
-      genAI = new GoogleGenerativeAI(apiKey);
-      isConfigValid = true;
-      // Only log in development to keep production logs clean
-      if (process.env.NODE_ENV === 'development') {
-        console.log('✅ Gemini API initialized successfully on server');
-      }
-    } else {
-      console.warn('⚠️ Gemini API key not configured. Mock mode will be used instead.');
+// Get API key from environment variable, checking both server and client versions
+const getApiKey = () => {
+  // First try server-side env var
+  const serverApiKey = typeof window === 'undefined' ? process.env.GEMINI_API_KEY : null;
+  // Then try client-side env var
+  const clientApiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
+  
+  // Use whichever is available
+  const apiKey = serverApiKey || clientApiKey || '';
+  
+  // Log the key source for debugging
+  console.log(`[Gemini] Using API key from ${serverApiKey ? 'server' : clientApiKey ? 'client' : 'nowhere'}`);
+  
+  return apiKey;
+};
+
+// Initialize on both server and client
+try {
+  const apiKey = getApiKey();
+  
+  if (apiKey && apiKey !== 'your_gemini_api_key_here') {
+    genAI = new GoogleGenerativeAI(apiKey);
+    isConfigValid = true;
+    // Only log in development to keep production logs clean
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ Gemini API initialized successfully');
     }
-  } catch (error) {
-    console.error('❌ Failed to initialize Gemini API:', error);
+  } else {
+    console.warn('⚠️ Gemini API key not configured. Mock mode will be used instead.');
   }
-} else {
-  // Only log in development
-  if (process.env.NODE_ENV === 'development') {
-    console.info('🔍 Gemini provider imported in browser context - API will be called via server endpoints');
-  }
+} catch (error) {
+  console.error('❌ Failed to initialize Gemini API:', error);
 }
 
 // Define generation config types
@@ -80,8 +88,22 @@ export class GeminiProvider {
     systemInstruction?: string,
     forceMock = false
   ) {
-    // Always use mock mode in browser context
-    this.useMockMode = typeof window !== 'undefined' || !isConfigValid || forceMock;
+    // ONLY use mock mode based on env variable or forceMock parameter
+    const envMockMode = process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'true';
+    
+    // Log all conditions for debugging
+    console.log('[GeminiProvider Debug]', {
+      envMockMode,
+      forceMock,
+      isConfigValid,
+      'window !== undefined': typeof window !== 'undefined',
+      'process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE': process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE
+    });
+    
+    // Set mock mode based ONLY on env variable or explicit forcing
+    this.useMockMode = envMockMode || forceMock;
+    
+    console.log(`[GeminiProvider] Mock mode ${this.useMockMode ? 'ENABLED' : 'DISABLED'}`);
     
     // Configure model parameters
     this.generationConfig = {
@@ -99,8 +121,8 @@ export class GeminiProvider {
     this.systemInstruction = systemInstruction || 
       "You are a test user of the game Baultro. You're playing a strategic game involving predictions and AI interactions.";
     
-    // Initialize the model (server-side only)
-    if (!this.useMockMode && genAI && typeof window === 'undefined') {
+    // Initialize the model if not in mock mode
+    if (!this.useMockMode && genAI) {
       // Initialize with the model name and configuration
       this.model = genAI.getGenerativeModel({ 
         model: "gemini-2.0-flash",
@@ -144,8 +166,8 @@ export class GeminiProvider {
       this.systemInstruction = systemInstruction;
     }
     
-    // Only re-initialize on server
-    if (!this.useMockMode && genAI && typeof window === 'undefined') {
+    // Only re-initialize if not in mock mode
+    if (!this.useMockMode && genAI) {
       this.model = genAI.getGenerativeModel({ 
         model: "gemini-2.0-flash",
         generationConfig: this.generationConfig as GenerationConfig,
@@ -199,26 +221,51 @@ export class GeminiProvider {
         throw new Error('Gemini model not initialized');
       }
       
-      // Convert messages to Gemini format
+      console.log("[GeminiProvider] Generating chat with messages:", messages);
+      
+      // Ensure first message is from user - this is required by Gemini
+      if (messages.length > 0 && messages[0].role !== 'user') {
+        console.log("[GeminiProvider] First message is not from user, prepending system message as user message");
+        // Prepend a user message with the system instruction
+        messages = [
+          { role: 'user', content: this.systemInstruction },
+          ...messages
+        ];
+      }
+      
+      // Convert messages to Gemini format, ensuring proper role mapping
       const chatHistory: Content[] = messages.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'model',
         parts: [{ text: msg.content }]
       }));
       
-      // Start a chat session
+      // Make sure the last message is from the user, as required by Gemini
+      const lastMessageIndex = chatHistory.length - 1;
+      if (lastMessageIndex >= 0 && chatHistory[lastMessageIndex].role !== 'user') {
+        console.warn("[GeminiProvider] Last message is not from user, adding a prompt");
+        // Add a user message asking for a response
+        chatHistory.push({
+          role: 'user',
+          parts: [{ text: "Please respond to the above message." }]
+        });
+      }
+      
+      console.log("[GeminiProvider] Processed chat history:", chatHistory);
+      
+      // Start a chat session with all but the last message
       const chat = this.model.startChat({
         history: chatHistory.slice(0, -1),
         generationConfig: this.generationConfig as GenerationConfig,
       });
       
       // Send the last message and get the response
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage && lastMessage.role === 'user') {
-        const result = await chat.sendMessage(lastMessage.content);
+      const lastMessage = chatHistory[chatHistory.length - 1];
+      if (lastMessage && lastMessage.role === 'user' && lastMessage.parts && lastMessage.parts[0] && typeof lastMessage.parts[0].text === 'string') {
+        const result = await chat.sendMessage(lastMessage.parts[0].text);
         return result.response.text();
       }
       
-      throw new Error('Invalid message format');
+      throw new Error('Invalid message format - last message must be from user');
     } catch (error) {
       console.error('Error generating chat with Gemini:', error);
       throw new Error('Failed to generate chat response');

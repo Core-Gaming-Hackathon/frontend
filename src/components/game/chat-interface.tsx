@@ -53,7 +53,7 @@ export function ChatInterface({
   onGameEnd,
   timeLimit = 300, // 5 minutes default
   stakeAmount = "0.1",
-  mockMode: initialMockMode = false // Rename to initialMockMode
+  mockMode: propMockMode = false // Rename to propMockMode for clarity
 }: ChatInterfaceProps) {
   const { isConnected, address } = useWallet();
   const [chatHistory, setChatHistory] = useState<AIMessage[]>([]);
@@ -69,7 +69,22 @@ export function ChatInterface({
   const [gameSecretPhrase, setGameSecretPhrase] = useState<string | null>(null);
   const [transactionInProgress, setTransactionInProgress] = useState(false);
   const [battleId, setBattleId] = useState<number | null>(null);
-  const [mockMode, setMockMode] = useState(initialMockMode); // Use initialMockMode as initial value
+  
+  // Get env mock mode directly from environment variable
+  const envMockMode = process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'true';
+  // Use passed mockMode prop or environment variable as fallback
+  const [mockMode, setMockMode] = useState(propMockMode || envMockMode);
+  
+  // Log mock mode configuration at startup
+  useEffect(() => {
+    console.log('[ChatInterface] Mock mode configuration:', {
+      propMockMode,
+      envMockMode,
+      initialMockModeState: mockMode,
+      NEXT_PUBLIC_ENABLE_MOCK_MODE: process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE
+    });
+  }, []);
+  
   const chatContainerRef = useRef<HTMLDivElement>(null);
   
   // Get string representation of game type
@@ -132,6 +147,9 @@ export function ChatInterface({
         setIsInitializing(true);
         setError(null);
         
+        // Log mock mode status at the start of initialization
+        console.log(`[ChatInterface] Starting initChat with mockMode=${mockMode}, env=${process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE}`);
+        
         // Create game service instance
         const gameService = AIServiceFactory.createGameService(aiProvider);
         
@@ -160,8 +178,15 @@ export function ChatInterface({
         
         setChatHistory(result.chatHistory as AIMessage[]);
         
+        // Add a debug log before the if statement to check values
+        console.log(`[ChatInterface] Before battle creation: mockMode=${mockMode}, isConnected=${isConnected}, stakeAmount=${stakeAmount}`);
+        
+        // Force console to show the decision making
+        const shouldCreateRealBattle = isConnected && parseFloat(stakeAmount) > 0 && !mockMode;
+        console.log(`[ChatInterface] Decision: shouldCreateRealBattle=${shouldCreateRealBattle} (isConnected=${isConnected}, stakeAmount=${parseFloat(stakeAmount) > 0}, !mockMode=${!mockMode})`);
+
         // If wallet is connected and not in mock mode, create a battle
-        if (isConnected && parseFloat(stakeAmount) > 0 && !mockMode) {
+        if (shouldCreateRealBattle) {
           try {
             setTransactionInProgress(true);
             
@@ -340,10 +365,16 @@ export function ChatInterface({
           } finally {
             setTransactionInProgress(false);
           }
-        } else if (mockMode || !isConnected) {
-          // In mock mode, just create a fake battle ID
+        } else {
+          // Add a debug log to show why we're using mock mode
+          const reason = !isConnected ? "wallet not connected" : 
+                         parseFloat(stakeAmount) <= 0 ? "stake amount is zero" :
+                         mockMode ? "mock mode enabled" : "unknown reason";
+          console.log(`Creating mock battle (reason: ${reason})`);
+          
+          // Create mock battle ID
           setBattleId(Date.now());
-          console.log(`Created mock battle with ID: ${Date.now()}`);
+          console.log(`Created mock battle with ID: ${Date.now()} (Mock mode: ${mockMode}, Connected: ${isConnected}, Stake: ${stakeAmount})`);
         }
       } catch (error) {
         console.error("Failed to initialize chat:", error);
@@ -354,7 +385,7 @@ export function ChatInterface({
     };
 
     initChat();
-  }, [gameType, difficultyLevel, aiProvider, personalityId, isConnected, stakeAmount, initialMockMode, address]);
+  }, [gameType, difficultyLevel, aiProvider, personalityId, isConnected, stakeAmount, propMockMode, address]);
   
   // Helper for converting difficulty to string
   function getDifficultyString(difficulty: DifficultyLevel): string {

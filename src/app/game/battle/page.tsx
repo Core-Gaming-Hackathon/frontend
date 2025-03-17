@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { GameType, DifficultyLevel, GameAttemptResult } from "@/shared/schemas/game/types";
 import { GameConfig } from "@/components/game/game-config";
@@ -9,6 +9,9 @@ import { GameResult } from "@/components/game/game-result";
 import { AIProviderType } from "@/lib/ai-service-factory";
 
 export default function BattleModePage() {
+  // Read mock mode from environment variable
+  const envMockMode = process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'true';
+  
   const [gameState, setGameState] = useState<'config' | 'playing' | 'result'>('config');
   const [gameConfig, setGameConfig] = useState<{
     difficultyLevel: DifficultyLevel;
@@ -20,6 +23,11 @@ export default function BattleModePage() {
   } | null>(null);
   const [gameResult, setGameResult] = useState<GameAttemptResult | null>(null);
   
+  // Log the environment mock mode setting
+  useEffect(() => {
+    console.log(`[BattleModePage] Environment mock mode: ${envMockMode}, value: ${process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE}`);
+  }, [envMockMode]);
+  
   // Handle game start
   const handleGameStart = (config: {
     difficultyLevel: DifficultyLevel;
@@ -29,7 +37,14 @@ export default function BattleModePage() {
     stakeAmount?: string;
     mockMode?: boolean;
   }) => {
-    setGameConfig(config);
+    // Use the mockMode from config, falling back to environment variable
+    const effectiveMockMode = config.mockMode ?? envMockMode;
+    console.log(`[BattleModePage] Starting game with mockMode: ${effectiveMockMode} (from config: ${config.mockMode}, env: ${envMockMode})`);
+    
+    setGameConfig({
+      ...config,
+      mockMode: effectiveMockMode
+    });
     setGameState('playing');
   };
   
