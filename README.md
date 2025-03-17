@@ -1,166 +1,183 @@
 # Core DAO Frontend
 
-A modern, production-ready frontend application for the Core DAO platform, built with Next.js 15, React 19, and Bun.
+A frontend application for interacting with the Core Blockchain Testnet.
 
-## 🚀 Features
+## Getting Started
 
-- **Prediction Markets**: Create and participate in prediction markets
-- **Gaming**: Interactive gaming experiences
-- **Chat Interface**: AI-powered chat interface using Gemini 2.0 Flash
-- **Marketplace**: Buy and sell digital assets
-- **Leaderboard**: Track user rankings and achievements
+### Prerequisites
 
-## 📋 Prerequisites
+- Node.js 18+ and Bun package manager
+- Core DAO wallet (for production use)
 
-- [Bun](https://bun.sh/) v1.2.5 or higher
-- [Node.js](https://nodejs.org/) v20 or higher (for certain tools)
-- [PostgreSQL](https://www.postgresql.org/) database
+### Installation
 
-## 🛠️ Installation
+```bash
+# Install dependencies
+bun install
+```
+
+### Development
+
+```bash
+# Run the development server
+bun run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+
+## Network Configuration
+
+### Mock Mode
+
+The application includes a mock mode for development that simulates blockchain interactions without making actual RPC calls. This is useful for development and testing when the blockchain network is unavailable or you want to avoid making excessive network requests.
+
+To enable mock mode, set the following environment variable:
+
+```
+NEXT_PUBLIC_ENABLE_MOCK_MODE=true
+```
+
+This is enabled by default in the `.env.local` file for development.
+
+### RPC Configuration
+
+The application uses the following RPC endpoints:
+
+- Primary: `NEXT_PUBLIC_RPC_URL` (default: https://rpc.test2.btcs.network)
+- Fallbacks:
+  - `NEXT_PUBLIC_FALLBACK_RPC_URL_1` (default: https://rpc.test2.coredao.org)
+  - `NEXT_PUBLIC_FALLBACK_RPC_URL_2` (default: https://rpc-core.icecreamswap.com)
+
+If the primary RPC endpoint is unavailable, the application will automatically try the fallback URLs.
+
+### Handling Network Issues
+
+If you encounter network issues with the Core Blockchain Testnet RPC endpoints:
+
+1. **Enable Mock Mode**: Set `NEXT_PUBLIC_ENABLE_MOCK_MODE=true` in your `.env.local` file
+2. **Try Alternative RPC Endpoints**: Configure alternative RPC endpoints in your `.env.local` file:
+   ```
+   NEXT_PUBLIC_RPC_URL=https://rpc.test2.coredao.org
+   NEXT_PUBLIC_FALLBACK_RPC_URL_1=https://rpc-core.icecreamswap.com
+   ```
+3. **Increase Timeout**: If the network is slow, increase the timeout:
+   ```
+   NEXT_PUBLIC_RPC_TIMEOUT=60000
+   ```
+
+## Features
+
+- **Prediction Market**: Create and participate in prediction markets
+- **Mock Mode**: Develop and test without actual blockchain interactions
+- **Responsive Design**: Works on desktop and mobile devices
+
+## Troubleshooting
+
+### Network Errors
+
+If you see errors like:
+
+```
+HTTP request failed. URL: https://rpc.test2.btcs.network
+Request body: {"method":"eth_call","params":[...]}
+Details: Failed to fetch
+```
+
+This indicates that the RPC endpoint is unreachable. Try the following:
+
+1. Check your internet connection
+2. Enable mock mode as described above
+3. Try alternative RPC endpoints
+4. Check if the Core Blockchain Testnet is experiencing issues
+
+### CORS Errors
+
+The application includes a CORS proxy to handle CORS issues with the RPC endpoints. If you still encounter CORS errors, try:
+
+1. Enable mock mode
+2. Use a browser extension to disable CORS (for development only)
+3. Set up a local proxy server
+
+## Development Setup
+
+### Prerequisites
+
+- Node.js 18+ and Bun package manager
+- Git
+
+### Installation
 
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-organization/core-dao-frontend.git
-   cd core-dao-frontend
-   ```
+```bash
+git clone https://github.com/yourusername/core-dao-frontend.git
+cd core-dao-frontend
+```
 
 2. Install dependencies:
-   ```bash
-   bun install
-   ```
-
-3. Set up environment variables:
-   ```bash
-   cp .env.example .env.local
-   ```
-   Edit `.env.local` with your specific configuration.
-
-4. Run database migrations:
-   ```bash
-   bun run db:migrate
-   ```
-
-5. Start the development server:
-   ```bash
-   bun run dev
-   ```
-
-## 🧪 Testing
-
-Run the test suite:
 ```bash
-bun test
+bun install
 ```
 
-Run specific tests:
+3. Create a `.env.local` file with your configuration:
+```
+NEXT_PUBLIC_RPC_URL=https://rpc.test2.btcs.network
+NEXT_PUBLIC_CHAIN_ID=1114
+NEXT_PUBLIC_PREDICTION_MARKET_ADDRESS=0xC44DE09ab7eEFC2a9a2116E04ca1fcEc86F520fF
+```
+
+4. Start the development server:
 ```bash
-bun test tests/prediction-market-e2e.test.tsx
+bun run dev
 ```
 
-Watch mode for development:
-```bash
-bun test:watch
-```
+## Mock Mode
 
-## 🏗️ Build
+To avoid excessive network requests during development, you can enable mock mode. This will use generated mock data instead of making actual blockchain calls.
 
-Build for production:
-```bash
-bun run prod:build
-```
+### Enabling Mock Mode
 
-Start production server:
-```bash
-bun run prod:start
-```
-
-## 📊 Bundle Analysis
-
-Analyze the bundle size:
-```bash
-bun run analyze
-```
-
-## 🗄️ Database
-
-The application uses PostgreSQL with Drizzle ORM for database operations. For comprehensive database documentation, see [DATABASE.md](./DATABASE.md).
-
-### Database Commands
-
-Generate migrations:
-```bash
-bun run db:generate
-```
-
-Run migrations:
-```bash
-bun run db:migrate
-```
-
-View database with Drizzle Studio:
-```bash
-bun run db:studio
-```
-
-Test database functionality:
-```bash
-bun run db:test
-```
-
-### Database Schema
-
-The database stores information about:
-- Users and their statistics
-- Predictions and their options
-- Bets placed on predictions
-
-See [DATABASE.md](./DATABASE.md) for detailed schema information and usage examples.
-
-## 📚 Documentation
-
-- [Database Documentation](./DATABASE.md)
-- [Deployment Guide](./DEPLOYMENT.md)
-- [Production Checklist](./PRODUCTION_CHECKLIST.md)
-- [Test Summary](./TEST_SUMMARY.md)
-
-## 🧩 Project Structure
+Add the following to your `.env.local` file:
 
 ```
-core-dao-frontend/
-├── public/              # Static assets
-├── src/
-│   ├── app/             # Next.js app router pages
-│   ├── db/              # Database schema and migrations
-│   │   ├── migrations/  # Database migration files
-│   │   └── schema/      # Database schema definitions
-│   ├── components/      # React components
-│   ├── hooks/           # Custom React hooks
-│   ├── lib/             # Utility libraries
-│   ├── scripts/         # Utility scripts
-│   ├── services/        # API services
-│   ├── styles/          # Global styles
-│   └── utils/           # Utility functions
-├── tests/               # Test files
-├── .env.example         # Example environment variables
-├── DATABASE.md          # Database documentation
-├── DEPLOYMENT.md        # Deployment guide
-├── next.config.js       # Next.js configuration
-├── package.json         # Project dependencies
-└── tsconfig.json        # TypeScript configuration
+NEXT_PUBLIC_ENABLE_MOCK_MODE=true
 ```
 
-## 🔧 Environment Variables
+When mock mode is enabled:
+- A "Mock Data Mode" indicator will appear in the UI
+- No actual blockchain calls will be made
+- Random mock predictions will be generated
+- Contract interactions will return successful mock responses
 
-See [.env.example](./.env.example) for all required environment variables.
+This is useful for:
+- UI development without blockchain connectivity
+- Testing the application without spending gas
+- Avoiding rate limits on RPC providers
+- Working offline
 
-## 🚢 Deployment
+### Disabling Mock Mode
 
-For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md).
+To disable mock mode and use real blockchain data, set:
 
-## 🔒 Security
+```
+NEXT_PUBLIC_ENABLE_MOCK_MODE=false
+```
 
-For security concerns, please email security@your-organization.com.
+Or remove the variable entirely from your `.env.local` file.
 
-## 📄 License
+## Performance Optimizations
+
+The application includes several optimizations to reduce network requests:
+
+1. **Data Caching**: Predictions and user bets are cached for 5 minutes
+2. **Auto-refresh Control**: Auto-refresh is disabled by default
+3. **Debounced Requests**: Multiple rapid requests are debounced
+4. **CORS Proxy**: A CORS proxy is used to avoid cross-origin issues
+5. **Mock Mode**: For development without blockchain calls
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.

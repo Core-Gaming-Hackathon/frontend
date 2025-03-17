@@ -1,8 +1,10 @@
 /**
  * EVM Configuration
  */
-import { chainSelector } from './chain-selector';
-import type { ChainConfig } from './chain-selector';
+import { chainSelector, CHAIN_CONFIGS } from './chain-selector';
+
+// Define the ChainConfig type based on the CHAIN_CONFIGS structure
+type ChainConfig = (typeof CHAIN_CONFIGS)[keyof typeof CHAIN_CONFIGS];
 
 // Network configuration
 export const NETWORKS = {
@@ -18,14 +20,14 @@ export const CURRENT_NETWORK: Network = 'testnet';
 
 // Re-export the Chain IDs from the chain selector
 export enum ChainId {
-  CORE_TESTNET = 1115
+  CORE_TESTNET = 1114
 }
 
 // Contract addresses by chain
 export const CONTRACT_ADDRESSES: Record<number, { predictionMarket: string; gameModes: string }> = {
   [ChainId.CORE_TESTNET]: {
-    predictionMarket: "0x93012953008ef9AbcB71F48C340166E8f384e985",
-    gameModes: "0xC44DE09ab7eEFC2a9a2116E04ca1fcEc86F520fF"
+    predictionMarket: "0xC44DE09ab7eEFC2a9a2116E04ca1fcEc86F520fF",
+    gameModes: "0x93012953008ef9AbcB71F48C340166E8f384e985"
   }
 } as const;
 

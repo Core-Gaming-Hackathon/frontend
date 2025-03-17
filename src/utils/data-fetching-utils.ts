@@ -1,8 +1,7 @@
 /**
  * Data Fetching Utilities
  * 
- * Provides utilities for data fetching with caching, error handling,
- * and retry mechanisms.
+ * Provides utilities for data fetching, caching, and management.
  */
 
 import { handleError, ErrorCategory } from "./error-utils";
@@ -10,15 +9,106 @@ import { handleError, ErrorCategory } from "./error-utils";
 // Add DATA_FETCHING to ErrorCategory if it doesn't exist
 const DATA_FETCHING = ErrorCategory.NETWORK; // Use NETWORK as a fallback
 
-// Cache for storing fetched data
+// Simple in-memory cache
 interface CacheEntry<T> {
   data: T;
   timestamp: number;
-  expiresAt: number;
 }
 
 // Global cache object
 const cache: Record<string, CacheEntry<unknown>> = {};
+
+// Default cache TTL in milliseconds (5 minutes)
+export const DEFAULT_CACHE_TTL = 5 * 60 * 1000;
+
+/**
+ * Get data from cache
+ * @param key Cache key
+ * @param ttl Time to live in milliseconds
+ * @returns Cached data or null if not found or expired
+ */
+export function getCachedData<T>(key: string, ttl = DEFAULT_CACHE_TTL): T | null {
+  const entry = cache[key];
+  if (!entry) return null;
+  
+  // Check if cache entry is still valid
+  if (Date.now() - entry.timestamp > ttl) {
+    delete cache[key];
+    return null;
+  }
+  
+  return entry.data as T;
+}
+
+/**
+ * Set data in cache
+ * @param key Cache key
+ * @param data Data to cache
+ */
+export function setCachedData<T>(key: string, data: T): void {
+  cache[key] = {
+    data,
+    timestamp: Date.now()
+  };
+}
+
+/**
+ * Clear a specific cache entry
+ * @param key Cache key
+ */
+export function clearCacheEntry(key: string): void {
+  delete cache[key];
+}
+
+/**
+ * Clear all cache entries
+ */
+export function clearCache(): void {
+  Object.keys(cache).forEach(key => {
+    delete cache[key];
+  });
+}
+
+/**
+ * Check if a cache entry exists and is valid
+ * @param key Cache key
+ * @param ttl Time to live in milliseconds
+ * @returns True if cache entry exists and is valid
+ */
+export function hasCachedData(key: string, ttl = DEFAULT_CACHE_TTL): boolean {
+  const entry = cache[key];
+  if (!entry) return false;
+  
+  return Date.now() - entry.timestamp <= ttl;
+}
+
+/**
+ * Get cache entry timestamp
+ * @param key Cache key
+ * @returns Timestamp of cache entry or null if not found
+ */
+export function getCacheTimestamp(key: string): number | null {
+  const entry = cache[key];
+  if (!entry) return null;
+  
+  return entry.timestamp;
+}
+
+/**
+ * Get time remaining until cache expiration
+ * @param key Cache key
+ * @param ttl Time to live in milliseconds
+ * @returns Time remaining in milliseconds or 0 if expired or not found
+ */
+export function getCacheTimeRemaining(key: string, ttl = DEFAULT_CACHE_TTL): number {
+  const entry = cache[key];
+  if (!entry) return 0;
+  
+  const timeElapsed = Date.now() - entry.timestamp;
+  const timeRemaining = ttl - timeElapsed;
+  
+  return timeRemaining > 0 ? timeRemaining : 0;
+}
 
 // Default cache options
 const DEFAULT_CACHE_OPTIONS = {
@@ -135,7 +225,7 @@ export async function fetchWithCache<T>(
     
     if (cacheEntry) {
       // If cache is still valid, return cached data
-      if (now < cacheEntry.expiresAt) {
+      if (now < cacheEntry.timestamp) {
         return cacheEntry.data;
       }
       
@@ -172,8 +262,7 @@ export async function fetchWithCache<T>(
       const now = Date.now();
       cache[cacheKey] = {
         data,
-        timestamp: now,
-        expiresAt: now + cacheTtl
+        timestamp: now
       };
     }
     
@@ -223,8 +312,7 @@ async function revalidateCache<T>(
     const now = Date.now();
     cache[cacheKey] = {
       data,
-      timestamp: now,
-      expiresAt: now + cacheTtl
+      timestamp: now
     };
   } catch (error) {
     // Log error but don't throw
@@ -347,31 +435,14 @@ function defaultIsRetryable(error: unknown): boolean {
 }
 
 /**
- * Clear all cache entries
- */
-export function clearCache(): void {
-  Object.keys(cache).forEach(key => {
-    delete cache[key];
-  });
-}
-
-/**
- * Clear a specific cache entry
- */
-export function clearCacheEntry(cacheKey: string): void {
-  delete cache[cacheKey];
-}
-
-/**
  * Get all cache entries (without the actual data)
  */
-export function getCacheEntries(): Record<string, { timestamp: number; expiresAt: number }> {
-  const entries: Record<string, { timestamp: number; expiresAt: number }> = {};
+export function getCacheEntries(): Record<string, { timestamp: number }> {
+  const entries: Record<string, { timestamp: number }> = {};
   
   Object.entries(cache).forEach(([key, entry]) => {
     entries[key] = {
-      timestamp: entry.timestamp,
-      expiresAt: entry.expiresAt
+      timestamp: entry.timestamp
     };
   });
   

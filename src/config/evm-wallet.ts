@@ -271,17 +271,61 @@ class EVMWallet implements EVMWalletInterface {
         throw new Error("Public client not initialized");
       }
 
-      const result = await this.publicClient.readContract({
+      // Add a timeout to prevent hanging calls
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Call to ${methodName} timed out after 10 seconds`));
+        }, 10000); // 10 second timeout
+      });
+
+      // Execute the contract call with timeout
+      const resultPromise = this.publicClient.readContract({
         address: contractAddress as `0x${string}`,
         abi,
         functionName: methodName,
         args,
       });
 
+      // Race between the contract call and the timeout
+      const result = await Promise.race([resultPromise, timeoutPromise]);
+
+      // If we get here, the call succeeded
       return result as T;
     } catch (error) {
-      console.error(`Error calling view method ${methodName}:`, error);
-      throw error;
+      // Enhanced error handling for Core testnet
+      let errorMessage = `Error calling view method ${methodName}`;
+      
+      if (error instanceof Error) {
+        if (error.message.includes("execution reverted")) {
+          // Check for specific Core testnet revert reasons
+          if (error.message.includes("nonexistent token")) {
+            errorMessage = `Prediction ID does not exist for ${methodName}`;
+          } else if (error.message.includes("not resolved")) {
+            errorMessage = `Prediction has not been resolved yet for ${methodName}`;
+          } else if (error.message.includes("invalid prediction")) {
+            errorMessage = `Invalid prediction ID for ${methodName}`;
+          } else if (error.message.includes("already resolved")) {
+            errorMessage = `Prediction has already been resolved for ${methodName}`;
+          } else if (error.message.includes("not creator")) {
+            errorMessage = `Only the prediction creator can call ${methodName}`;
+          } else {
+            errorMessage = `Contract execution reverted for ${methodName}. This could mean the contract doesn't exist, the method doesn't exist, or the contract state doesn't allow this call.`;
+          }
+        } else if (error.message.includes("timeout")) {
+          errorMessage = `Call to ${methodName} timed out. The Core testnet RPC might be congested or unresponsive.`;
+        } else if (error.message.includes("could not decode result")) {
+          errorMessage = `Invalid response from ${methodName}. The contract might not be deployed correctly on Core testnet.`;
+        } else if (error.message.includes("network disconnected")) {
+          errorMessage = `Lost connection to Core testnet while calling ${methodName}. Please check your network connection.`;
+        } else if (error.message.includes("insufficient funds")) {
+          errorMessage = `Insufficient tCORE balance for ${methodName}. Please get some testnet tokens.`;
+        } else {
+          errorMessage = `${errorMessage}: ${error.message}`;
+        }
+      }
+      
+      console.error(errorMessage, error);
+      throw new Error(errorMessage);
     }
   }
 
@@ -305,33 +349,54 @@ class EVMWallet implements EVMWalletInterface {
       }
 
       const currentChain = chainSelector.getActiveChain();
-      const chainConfig = {
-        id: currentChain.chainId,
-        name: currentChain.name,
-        rpcUrls: {
-          default: {
-            http: [currentChain.rpcUrl],
-          },
-          public: {
-            http: [currentChain.rpcUrl],
-          }
-        },
-        nativeCurrency: currentChain.nativeCurrency,
-      } as Chain;
+      
+      // Verify we're on Core testnet
+      if (currentChain.chainId !== 1114) {
+        throw new Error("Please switch to Core testnet (Chain ID: 1114)");
+      }
+
+      // Verify contract address matches expected
+      if (contractAddress.toLowerCase() !== chainSelector.getPredictionMarketAddress().toLowerCase()) {
+        throw new Error("Invalid contract address for Core testnet");
+      }
 
       // Prepare the transaction
-      await this.publicClient.simulateContract({
-        address: contractAddress as `0x${string}`,
-        abi,
-        functionName: methodName,
-        args,
-        account: this.address as `0x${string}`,
-        value: value || undefined,
-      });
+      try {
+        await this.publicClient.simulateContract({
+          address: contractAddress as `0x${string}`,
+          abi,
+          functionName: methodName,
+          args,
+          account: this.address as `0x${string}`,
+          value: value || undefined,
+        });
+      } catch (simError) {
+        // Enhanced simulation error handling
+        if (simError instanceof Error) {
+          if (simError.message.includes("execution reverted")) {
+            throw new Error(`Transaction would fail: ${simError.message}`);
+          } else if (simError.message.includes("insufficient funds")) {
+            throw new Error("Insufficient tCORE balance. Please get some testnet tokens.");
+          }
+        }
+        throw simError;
+      }
 
       // Send the transaction
       const hash = await this.walletClient.writeContract({
-        chain: chainConfig,
+        chain: {
+          id: currentChain.chainId,
+          name: currentChain.name,
+          rpcUrls: {
+            default: {
+              http: [currentChain.rpcUrl],
+            },
+            public: {
+              http: [currentChain.rpcUrl],
+            }
+          },
+          nativeCurrency: currentChain.nativeCurrency,
+        } as Chain,
         address: contractAddress as `0x${string}`,
         abi,
         functionName: methodName,
@@ -340,8 +405,15 @@ class EVMWallet implements EVMWalletInterface {
         value: value || undefined,
       });
 
-      // Wait for the transaction to be mined
-      const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
+      // Wait for the transaction with timeout
+      const receiptPromise = this.publicClient.waitForTransactionReceipt({ hash });
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("Transaction confirmation timed out"));
+        }, 60000); // 60 second timeout
+      });
+
+      const receipt = await Promise.race([receiptPromise, timeoutPromise]);
 
       return {
         hash: hash,
@@ -350,11 +422,28 @@ class EVMWallet implements EVMWalletInterface {
       };
     } catch (error) {
       console.error(`Error calling method ${methodName}:`, error);
+      
+      // Enhanced error handling
+      let errorMessage = "Transaction failed";
+      if (error instanceof Error) {
+        if (error.message.includes("user rejected")) {
+          errorMessage = "Transaction was rejected by user";
+        } else if (error.message.includes("insufficient funds")) {
+          errorMessage = "Insufficient tCORE balance. Please get some testnet tokens.";
+        } else if (error.message.includes("nonce too low")) {
+          errorMessage = "Transaction nonce error. Please try again.";
+        } else if (error.message.includes("gas required exceeds allowance")) {
+          errorMessage = "Transaction would exceed gas limit. Please try a smaller amount.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+
       return {
         hash: "",
-        status: error instanceof Error ? error.message : "Unknown error",
+        status: errorMessage,
         success: false,
-        errorMessage: error instanceof Error ? error.message : "Unknown error",
+        errorMessage: errorMessage,
       };
     }
   }

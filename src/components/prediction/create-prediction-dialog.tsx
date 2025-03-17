@@ -90,7 +90,7 @@ export function CreatePredictionDialog({
       title,
       description,
       filteredOptions,
-      stake
+      Number(stake)
     );
     
     if (success) {

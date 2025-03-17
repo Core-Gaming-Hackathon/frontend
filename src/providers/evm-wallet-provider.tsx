@@ -28,6 +28,7 @@ interface EVMWalletContextType {
     hash: string;
     status: string;
     success: boolean;
+    data?: unknown;
   }>;
   signIn: () => Promise<boolean>;
   signOut: () => Promise<boolean>;
@@ -53,19 +54,35 @@ export function EVMWalletProvider({ children }: { children: React.ReactNode }) {
   const [address, setAddress] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
   useEffect(() => {
+    // Only run initialization once
+    if (isInitialized) return;
+
     // Initialize wallet connection on component mount
     const initWallet = async () => {
       try {
         await evmWallet.init();
         const walletAddress = evmWallet.getAddress();
-        setAddress(walletAddress);
-        setIsConnected(!!walletAddress);
+        
+        // Check localStorage for persisted connection
+        const shouldBeConnected = window.localStorage.getItem("walletConnected") === "true";
+        
+        if (shouldBeConnected && !walletAddress) {
+          // Try to reconnect if we should be connected but aren't
+          await evmWallet.connectWallet();
+        }
+        
+        // Update state with latest wallet address
+        const finalAddress = evmWallet.getAddress();
+        setAddress(finalAddress);
+        setIsConnected(!!finalAddress);
       } catch (error) {
         console.error("Failed to initialize wallet:", error);
       } finally {
         setIsLoading(false);
+        setIsInitialized(true);
       }
     };
 
@@ -85,7 +102,7 @@ export function EVMWalletProvider({ children }: { children: React.ReactNode }) {
       clearInterval(checkAddressInterval);
       evmWallet.cleanup();
     };
-  }, [address]);
+  }, [address, isInitialized]);
 
   // Connect wallet
   const signIn = async (): Promise<boolean> => {
@@ -163,40 +180,109 @@ export function EVMWalletProvider({ children }: { children: React.ReactNode }) {
     args: unknown[] = [],
     value: string = "0",
     contractName: string = "predictionMarket"
-  ): Promise<{ hash: string; status: string; success: boolean }> => {
+  ): Promise<{ hash: string; status: string; success: boolean; data?: unknown }> => {
     try {
       if (!isConnected) {
-        toast.error("Wallet not connected");
+        // Don't show toast for wallet connection errors - let the calling code handle it
+        console.warn(`Wallet not connected when calling ${methodName}`);
         throw new Error("Wallet not connected");
       }
 
       // Get contract address - contractName might be an actual address
       const contractAddress = getContractAddress(contractName);
 
-      // Call the method
-      const result = await evmWallet.callMethod(
-        contractAddress,
-        getContractAbi(contractName),
-        methodName,
-        args,
-        BigInt(value)
-      );
-
-      if (result.success) {
-        toast.success("Transaction successful");
+      // Check if this is a view method (starts with "get" or "view")
+      const isViewMethod = methodName.startsWith("get") || methodName.startsWith("view");
+      
+      if (isViewMethod) {
+        try {
+          // For view methods, use callViewMethod instead
+          const data = await evmWallet.callViewMethod(
+            contractAddress,
+            getContractAbi(contractName),
+            methodName,
+            args
+          );
+          
+          return {
+            hash: "",
+            status: "success",
+            success: true,
+            data
+          };
+        } catch (viewError) {
+          // Handle view method errors more gracefully
+          console.warn(`Error calling view method ${methodName}:`, viewError);
+          
+          // Return a failed result but don't throw - let the calling code handle it
+          return {
+            hash: "",
+            status: viewError instanceof Error ? viewError.message : "View method failed",
+            success: false,
+            data: null
+          };
+        }
       } else {
-        toast.error("Transaction failed");
-      }
+        // For state-changing methods, use callMethod
+        const result = await evmWallet.callMethod(
+          contractAddress,
+          getContractAbi(contractName),
+          methodName,
+          args,
+          BigInt(value)
+        );
 
-      return {
-        hash: result.hash,
-        status: result.status,
-        success: result.success ?? false,
-      };
+        // Only show success toast for state-changing methods
+        if (result.success) {
+          toast.success("Transaction successful");
+        } else if (!result.success) {
+          toast.error("Transaction failed");
+        }
+
+        // Return the result (without data for state-changing methods)
+        return {
+          hash: result.hash || "",
+          status: result.status || "",
+          success: result.success ?? false
+        };
+      }
     } catch (error) {
+      // Log the error but don't show toast - let the calling code handle it
       console.error(`Error calling method ${methodName}:`, error);
-      toast.error(`Error calling ${methodName}`);
+      
+      // Don't show toast for wallet connection errors - let the calling code handle it
+      if (!(error instanceof Error && error.message === "Wallet not connected")) {
+        toast.error(`Error calling ${methodName}`);
+      }
+      
       throw error;
+    }
+  };
+
+  // Helper function to get contract ABI
+  const getContractAbi = (contractName: string): Abi => {
+    // If it's an address, check if it matches our known contracts
+    if (contractName.startsWith('0x')) {
+      const config = chainSelector.getActiveChain();
+      if (contractName.toLowerCase() === config.predictionMarketContract.toLowerCase()) {
+        return baultroPredictionMarketAbi.abi as Abi;
+      }
+      if (contractName.toLowerCase() === config.gameModesContract.toLowerCase()) {
+        return baultroGamesAbi.abi as Abi;
+      }
+    }
+
+    // Otherwise check by name
+    switch (contractName.toLowerCase()) {
+      case "predictionmarket":
+      case "baultropredictionmarket":
+        return baultroPredictionMarketAbi.abi as Abi;
+      case "gamemodes":
+      case "baultrogames":
+        return baultroGamesAbi.abi as Abi;
+      default:
+        // If we can't determine the ABI, throw an error
+        throw new Error(`Unknown contract: ${contractName}`);
     }
   };
 
@@ -204,40 +290,25 @@ export function EVMWalletProvider({ children }: { children: React.ReactNode }) {
   const getContractAddress = (contractName?: string): string => {
     const config = chainSelector.getActiveChain();
 
-    // If the input looks like an address, return it directly
+    // If the input looks like an address, validate it
     if (contractName?.startsWith('0x') && contractName?.length === 42) {
-      return contractName;
+      // Verify it's one of our known contracts
+      if (contractName.toLowerCase() === config.predictionMarketContract.toLowerCase() ||
+          contractName.toLowerCase() === config.gameModesContract.toLowerCase()) {
+        return contractName;
+      }
+      throw new Error(`Invalid contract address: ${contractName}`);
     }
 
-    if (!contractName) {
+    // Get address by name
+    if (!contractName || contractName.toLowerCase() === "predictionmarket") {
       return config.predictionMarketContract;
     }
-
-    switch (contractName) {
-      case "predictionMarket":
-        return config.predictionMarketContract;
-      case "gameModesContract":
-        return config.gameModesContract;
-      default:
-        return contractName; // Assume contractName is the address if not recognized
+    if (contractName.toLowerCase() === "gamemodes") {
+      return config.gameModesContract;
     }
-  };
 
-  // Helper function to get contract ABI
-  const getContractAbi = (contractName: string): Abi => {
-    switch (contractName.toLowerCase()) {
-      case "predictionmarket":
-        return baultroPredictionMarketAbi.abi as Abi;
-      case "gamemodes":
-        return baultroGamesAbi.abi as Abi;
-      case "baultropredictionmarket":
-        return baultroPredictionMarketAbi.abi as Abi;
-      case "baultrogames":
-        return baultroGamesAbi.abi as Abi;
-      default:
-        console.warn(`Unknown contract name: ${contractName}, using prediction market ABI`);
-        return baultroPredictionMarketAbi.abi as Abi;
-    }
+    throw new Error(`Unknown contract name: ${contractName}`);
   };
 
   return (

@@ -65,6 +65,7 @@ export function useAutoRefresh(
       setLastRefreshed(new Date());
     } catch (error) {
       console.error("Error refreshing data:", error);
+      // Don't show error toast for auto-refresh errors
     } finally {
       setIsRefreshing(false);
     }
@@ -92,54 +93,103 @@ export function useAutoRefresh(
   
   // Set up auto-refresh on mount
   useEffect(() => {
+    // Only refresh on mount if specified
     if (refreshOnMount) {
-      refresh();
+      // Use a small delay to prevent immediate refresh
+      const timer = setTimeout(() => {
+        refresh();
+      }, 500);
+      
+      return () => clearTimeout(timer);
     }
     
+    return undefined;
+  }, [refreshOnMount]);
+  
+  // Set up auto-refresh interval
+  useEffect(() => {
     if (startImmediately) {
-      startAutoRefresh();
+      // Use a small delay to prevent immediate refresh
+      const timer = setTimeout(() => {
+        startAutoRefresh();
+      }, 1000);
+      
+      return () => {
+        clearTimeout(timer);
+        stopAutoRefresh();
+      };
     }
     
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+      stopAutoRefresh();
     };
-  }, []);
+  }, [startImmediately, interval]);
   
-  // Set up refresh on window focus
+  // Set up window focus listener
   useEffect(() => {
-    if (!refreshOnFocus) return;
+    if (!refreshOnFocus) return undefined;
+    
+    // Debounce the focus handler to prevent multiple refreshes
+    let focusTimeout: number | null = null;
     
     const handleFocus = () => {
-      if (isEnabled) {
-        refresh();
+      // Clear any existing timeout
+      if (focusTimeout) {
+        clearTimeout(focusTimeout);
       }
+      
+      // Set a new timeout to debounce the refresh
+      focusTimeout = window.setTimeout(() => {
+        // Only refresh if auto-refresh is enabled and it's been at least 10 seconds since the last refresh
+        if (isEnabled && (!lastRefreshed || Date.now() - lastRefreshed.getTime() > 10000)) {
+          refresh();
+        }
+        focusTimeout = null;
+      }, 1000);
     };
     
     window.addEventListener("focus", handleFocus);
     
     return () => {
       window.removeEventListener("focus", handleFocus);
+      if (focusTimeout) {
+        clearTimeout(focusTimeout);
+      }
     };
-  }, [isEnabled, refreshOnFocus]);
+  }, [refreshOnFocus, isEnabled, lastRefreshed]);
   
-  // Set up refresh on network reconnect
+  // Set up online listener
   useEffect(() => {
-    if (!refreshOnReconnect) return;
+    if (!refreshOnReconnect) return undefined;
+    
+    // Debounce the online handler to prevent multiple refreshes
+    let onlineTimeout: number | null = null;
     
     const handleOnline = () => {
-      if (isEnabled) {
-        refresh();
+      // Clear any existing timeout
+      if (onlineTimeout) {
+        clearTimeout(onlineTimeout);
       }
+      
+      // Set a new timeout to debounce the refresh
+      onlineTimeout = window.setTimeout(() => {
+        // Only refresh if auto-refresh is enabled
+        if (isEnabled) {
+          refresh();
+        }
+        onlineTimeout = null;
+      }, 2000);
     };
     
     window.addEventListener("online", handleOnline);
     
     return () => {
       window.removeEventListener("online", handleOnline);
+      if (onlineTimeout) {
+        clearTimeout(onlineTimeout);
+      }
     };
-  }, [isEnabled, refreshOnReconnect]);
+  }, [refreshOnReconnect, isEnabled]);
   
   return {
     refresh,

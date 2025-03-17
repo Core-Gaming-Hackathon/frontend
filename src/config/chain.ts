@@ -7,7 +7,7 @@ import { defineChain } from 'viem';
  * CORE Testnet chain definition
  */
 export const coreTestnet = defineChain({
-  id: 1115,
+  id: 1114,
   name: 'CORE Testnet',
   network: 'core_testnet',
   nativeCurrency: {

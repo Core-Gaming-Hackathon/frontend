@@ -5,23 +5,37 @@
  * data fetching, and state management.
  */
 
-import { useState, useCallback, useEffect } from "react";
-import { useWallet } from "@/providers/evm-wallet-provider";
+import { useState, useCallback, useRef } from "react";
+import { useWallet } from "@/hooks/use-wallet";
+import { evmWallet } from "@/config/evm-wallet";
 import { chainSelector } from "@/config/chain-selector";
-import { Prediction, UserBet } from "@/utils/prediction-utils";
+import { Prediction as PredictionType } from "@/types/prediction";
 import { 
   ErrorMessages, 
   SuccessMessages, 
-  handleContractError, 
   showLoadingToast
 } from "@/utils/error-utils";
-import { fetchWithCache } from "@/utils/data-fetching-utils";
-import { useMockData } from "@/components/ui/mock-data-indicator";
-import { simulateGetUserBets } from "@/utils/prediction-market-test-utils";
+import { clearCacheEntry } from "@/utils/data-fetching-utils";
+import { parseEther, createPublicClient, http, type Abi } from "viem";
+import { abi as predictionMarketAbiJson } from "@/abis/BaultroPredictionMarket.json";
+import { createCorsProxyTransport } from "@/services/cors-proxy";
+import { toast } from "sonner";
+import { generateMockPredictions, isMockModeEnabled } from "@/utils/mock-data";
+
+// Cache TTL in milliseconds (5 minutes)
+const CACHE_TTL = 5 * 60 * 1000;
+
+// Define CallMethodResult interface
+interface CallMethodResult {
+  success: boolean;
+  hash: string;
+  status: string;
+  errorMessage?: string;
+}
 
 // Define return type for the hook
 interface UsePredictionMarketReturn {
-  predictions: Prediction[];
+  predictions: PredictionType[];
   userBets: UserBet[];
   isLoading: boolean;
   isCreatingPrediction: boolean;
@@ -35,8 +49,8 @@ interface UsePredictionMarketReturn {
     title: string,
     description: string,
     options: string[],
-    stake: string
-  ) => Promise<boolean>;
+    stake: number
+  ) => Promise<CallMethodResult>;
   placeBet: (
     predictionId: number,
     optionId: number,
@@ -50,325 +64,446 @@ interface UsePredictionMarketReturn {
   clearError: () => void;
 }
 
-// Define the expected return type from callMethod
-interface CallMethodResult {
-  hash?: string;
-  status?: string;
-  success: boolean;
-  data?: unknown;
-}
-
-// Define the prediction data structure from the contract
+// Define the contract prediction type
 interface ContractPrediction {
-  id: string | number;
+  id: bigint;
   creator: string;
   title: string;
   description: string;
   options: string[];
-  stake: string | number;
-  totalBets: string | number;
-  resolvedOption: string | number;
-  createdAt: string | number;
-  resolvedAt: string | number;
-  txHash?: string;
+  stake: bigint;
+  totalBets: bigint;
+  resolvedOption: number;
+  createdAt: bigint;
+  resolvedAt: bigint;
 }
 
-// Define the bet data structure from the contract
-interface BetData {
-  optionId: string | number;
-  amount: string | number;
-  createdAt: string | number;
+// Define the UserBet interface
+interface UserBet {
+  id: string;
+  predictionId: string;
+  prediction: {
+    title: string;
+    options: Array<{ id: number; text: string }>;
+    resolvedOption: number;
+  };
+  optionId: number;
+  amount: string;
+  createdAt: string;
   claimed: boolean;
 }
 
-/**
- * Safely convert a timestamp to ISO string
- */
-function safeTimestampToISOString(timestamp: string | number | undefined): string | undefined {
-  if (!timestamp) return undefined;
-  
-  try {
-    // For testing environments, use a fixed date
-    if (typeof window === 'undefined' || process.env.NODE_ENV === 'test') {
-      return new Date().toISOString();
-    }
-    
-    // Convert to number if it's a string
-    const timestampNum = typeof timestamp === 'string' ? parseInt(timestamp, 10) : timestamp;
-    
-    // Check if the timestamp is in seconds (common for blockchain) or milliseconds
-    const timestampMs = timestampNum < 10000000000 ? timestampNum * 1000 : timestampNum;
-    
-    // Create date and validate
-    const date = new Date(timestampMs);
-    return !isNaN(date.getTime()) ? date.toISOString() : new Date().toISOString();
-  } catch (error) {
-    console.error("Error converting timestamp to ISO string:", error);
-    return new Date().toISOString();
-  }
+// Simple in-memory cache
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
 }
+
+const cache: Record<string, CacheEntry<unknown>> = {};
+
+// Cache helper functions
+function getCachedData<T>(key: string): T | null {
+  const entry = cache[key];
+  if (!entry) return null;
+  
+  // Check if cache entry is still valid
+  if (Date.now() - entry.timestamp > CACHE_TTL) {
+    delete cache[key];
+    return null;
+  }
+  
+  return entry.data as T;
+}
+
+function setCachedData<T>(key: string, data: T): void {
+  cache[key] = {
+    data,
+    timestamp: Date.now()
+  };
+}
+
+// Create a public client singleton to avoid creating multiple instances
+let publicClientInstance: ReturnType<typeof createPublicClient> | null = null;
 
 /**
  * Custom hook for interacting with the prediction market contract
  */
 export function usePredictionMarket(): UsePredictionMarketReturn {
-  const { isConnected, address, callMethod } = useWallet();
-  const [predictions, setPredictions] = useState<Prediction[]>([]);
+  // State for predictions and user bets
+  const [predictions, setPredictions] = useState<PredictionType[]>([]);
   const [userBets, setUserBets] = useState<UserBet[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  
+  // Loading states
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isCreatingPrediction, setIsCreatingPrediction] = useState<boolean>(false);
   const [isPlacingBet, setIsPlacingBet] = useState<boolean>(false);
   const [isResolvingPrediction, setIsResolvingPrediction] = useState<boolean>(false);
   const [isClaimingWinnings, setIsClaimingWinnings] = useState<boolean>(false);
+  
+  // Error state
   const [error, setError] = useState<Error | null>(null);
-  const { notifyMockDataUsed } = useMockData();
-
-  // Helper function to determine if mock data should be used
-  const shouldUseMockData = useCallback(() => {
-    return process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'true' || 
-           process.env.NODE_ENV === 'test' ||
-           typeof window === 'undefined';
-  }, []);
-
-  // Clear error
+  
+  // Get wallet connection status
+  const { isConnected, address } = useWallet();
+  
+  // Use refs to prevent multiple simultaneous calls
+  const isFetchingPredictions = useRef<boolean>(false);
+  const isFetchingUserBets = useRef<boolean>(false);
+  
+  // Track last fetch time to prevent too frequent refreshes
+  const lastPredictionsFetchTime = useRef<number>(0);
+  const lastUserBetsFetchTime = useRef<number>(0);
+  
+  // Minimum time between refreshes (in milliseconds)
+  const MIN_REFRESH_INTERVAL = 30000; // 30 seconds
+  
+  // Clear error state
   const clearError = useCallback(() => {
     setError(null);
   }, []);
-
-  // Fetch predictions from the contract
-  const fetchPredictions = useCallback(async (forceRefresh = false) => {
+  
+  // Get or create the public client
+  const getPublicClient = useCallback(() => {
+    if (publicClientInstance) return publicClientInstance;
+    
+    const rpcUrl = chainSelector.getRpcUrl();
+    publicClientInstance = createPublicClient({
+      transport: createCorsProxyTransport(rpcUrl),
+    });
+    
+    return publicClientInstance;
+  }, []);
+  
+  // Helper function to call contract methods
+  const callMethod = useCallback(async (
+    methodName: string,
+    args: unknown[] = [],
+    value: string = "0"
+  ): Promise<CallMethodResult> => {
     try {
-      setIsLoading(true);
       clearError();
       
-      // Use fetchWithCache to get predictions with caching
-      const result = await fetchWithCache<CallMethodResult>(
-        async () => {
-          return await callMethod(
-            "getPredictions",
-            [0, 10], // start, limit
-            "0",
-            chainSelector.getPredictionMarketAddress()
-          ) as CallMethodResult;
-        },
-        {
-          cacheKey: "predictions",
-          cacheTtl: 30000, // 30 seconds
-          cacheEnabled: !forceRefresh, // Skip cache if forceRefresh is true
-          errorMessage: ErrorMessages.FETCH_PREDICTIONS,
-          fallbackData: { success: false, data: null },
-          throwOnError: false
-        }
+      if (!isConnected || !address) {
+        return {
+          success: false,
+          hash: "",
+          status: "Wallet not connected",
+          errorMessage: "Wallet not connected"
+        };
+      }
+      
+      // If mock mode is enabled, return a successful mock response
+      if (isMockModeEnabled()) {
+        return {
+          success: true,
+          hash: `0x${Array.from({ length: 64 }).map(() => Math.floor(Math.random() * 16).toString(16)).join('')}`,
+          status: "success"
+        };
+      }
+      
+      const result = await evmWallet.callMethod(
+        chainSelector.getPredictionMarketAddress(),
+        predictionMarketAbiJson as Abi,
+        methodName,
+        args,
+        BigInt(value)
       );
       
-      if (result.success && result.data) {
-        // Transform contract data to our format
-        const formattedPredictions = (result.data as ContractPrediction[]).map((pred) => ({
-          id: `pred-${pred.id}`,
-          predictionId: Number(pred.id),
-          creator: pred.creator,
-          title: pred.title,
-          description: pred.description,
-          options: pred.options.map((opt, i) => ({ 
-            id: i, 
-            text: opt 
-          })),
-          stake: pred.stake.toString(),
-          totalBets: pred.totalBets.toString(),
-          resolvedOption: Number(pred.resolvedOption),
-          createdAt: safeTimestampToISOString(pred.createdAt) || new Date().toISOString(),
-          resolvedAt: Number(pred.resolvedAt) > 0 
-            ? safeTimestampToISOString(pred.resolvedAt)
-            : undefined,
-          chainId: chainSelector.getActiveChainId(),
-          txHash: pred.txHash || "0x",
-        }));
-        
-        setPredictions(formattedPredictions);
-      } else {
-        // If contract call fails, use mock data for development
-        console.warn("Failed to fetch predictions from contract, using mock data");
-        
-        // Notify that we're using mock data
-        notifyMockDataUsed("Prediction Market");
-        
-        // Import mock data only when needed (for better tree-shaking)
-        const { mockPredictions } = await import("@/utils/prediction-market-test-utils");
+      if (!result.success) {
+        throw new Error(result.errorMessage || `Failed to call ${methodName}`);
+      }
+
+      return {
+        success: true,
+        hash: result.hash,
+        status: "success"
+      };
+    } catch (error) {
+      console.error(`[CONTRACT] Error calling ${methodName}:`, error);
+      setError(error instanceof Error ? error : new Error(`Failed to call ${methodName}`));
+      return {
+        success: false,
+        hash: "",
+        status: "failed",
+        errorMessage: error instanceof Error ? error.message : String(error)
+      };
+    }
+  }, [isConnected, address, clearError]);
+
+  // Helper function to fetch prediction options
+  const fetchPredictionOptions = useCallback(async (predictionId: bigint, publicClient: ReturnType<typeof createPublicClient>): Promise<string[]> => {
+    try {
+      // Check cache first
+      const cacheKey = `prediction-options-${predictionId.toString()}`;
+      const cachedOptions = getCachedData<string[]>(cacheKey);
+      if (cachedOptions) {
+        return cachedOptions;
+      }
+      
+      // Fetch options from contract
+      const options = await publicClient.readContract({
+        address: chainSelector.getPredictionMarketAddress() as `0x${string}`,
+        abi: predictionMarketAbiJson,
+        functionName: 'getPrediction',
+        args: [predictionId],
+      }) as unknown as ContractPrediction;
+      
+      // Cache the result
+      setCachedData(cacheKey, options.options);
+      
+      return options.options;
+    } catch (error) {
+      console.error(`Error fetching prediction options for ID ${predictionId}:`, error);
+      return [];
+    }
+  }, []);
+
+  // Fetch predictions from the contract
+  const fetchPredictions = useCallback(async (forceRefresh = false): Promise<void> => {
+    // Prevent multiple simultaneous calls
+    if (isFetchingPredictions.current) return;
+    
+    // Check if we should use cached data
+    const now = Date.now();
+    if (
+      !forceRefresh && 
+      lastPredictionsFetchTime.current > 0 && 
+      now - lastPredictionsFetchTime.current < MIN_REFRESH_INTERVAL
+    ) {
+      // Use cached data if available and not forcing refresh
+      const cachedPredictions = getCachedData<PredictionType[]>('predictions');
+      if (cachedPredictions && cachedPredictions.length > 0) {
+        return;
+      }
+    }
+    
+    // Set loading state
+    setIsLoading(true);
+    isFetchingPredictions.current = true;
+    
+    try {
+      // Clear any previous errors
+      clearError();
+      
+      // Check if mock mode is enabled
+      if (isMockModeEnabled()) {
+        console.log('Using mock predictions data');
+        const mockPredictions = generateMockPredictions(15);
         setPredictions(mockPredictions);
+        setCachedData('predictions', mockPredictions);
+        lastPredictionsFetchTime.current = now;
+        setIsLoading(false);
+        isFetchingPredictions.current = false;
+        return;
+      }
+      
+      try {
+        // Create a public client
+        const publicClient = getPublicClient();
+        
+        // Get prediction count
+        const count = await publicClient.readContract({
+          address: chainSelector.getPredictionMarketAddress() as `0x${string}`,
+          abi: predictionMarketAbiJson as Abi,
+          functionName: 'getPredictionsCount',
+        }) as bigint;
+        
+        // If no predictions, return empty array
+        if (count === BigInt(0)) {
+          setPredictions([]);
+          setCachedData('predictions', []);
+          lastPredictionsFetchTime.current = now;
+          return;
+        }
+        
+        // Get predictions in batches to avoid timeout
+        const batchSize = BigInt(5);
+        const batches = Math.ceil(Number(count) / Number(batchSize));
+        const allPredictions: PredictionType[] = [];
+        
+        for (let i = 0; i < batches; i++) {
+          const fromIndex = BigInt(i) * batchSize;
+          const limit = i === batches - 1 ? count - fromIndex : batchSize;
+          
+          if (limit <= BigInt(0)) break;
+          
+          try {
+            const batchPredictions = await publicClient.readContract({
+              address: chainSelector.getPredictionMarketAddress() as `0x${string}`,
+              abi: predictionMarketAbiJson as Abi,
+              functionName: 'getPredictions',
+              args: [fromIndex, limit],
+            }) as unknown as ContractPrediction[];
+            
+            // Process each prediction
+            for (const prediction of batchPredictions) {
+              try {
+                // Fetch options for this prediction
+                const options = await fetchPredictionOptions(prediction.id, publicClient);
+                
+                // Convert to our prediction type
+                const processedPrediction: PredictionType = {
+                  predictionId: Number(prediction.id),
+                  title: prediction.title,
+                  description: prediction.description,
+                  options: options.map((text, id) => ({ id, text })),
+                  creator: prediction.creator,
+                  stake: prediction.stake.toString(),
+                  totalBets: prediction.totalBets.toString(),
+                  resolvedOption: prediction.resolvedOption,
+                  chainId: chainSelector.getActiveChainId(),
+                  txHash: '', // Not available from contract
+                  createdAt: new Date(Number(prediction.createdAt) * 1000).toISOString(),
+                  resolvedAt: prediction.resolvedAt > BigInt(0) 
+                    ? new Date(Number(prediction.resolvedAt) * 1000).toISOString() 
+                    : undefined
+                };
+                
+                allPredictions.push(processedPrediction);
+              } catch (error) {
+                console.error(`Error processing prediction ${prediction.id}:`, error);
+              }
+            }
+          } catch (error) {
+            console.error(`Error fetching prediction batch ${i}:`, error);
+          }
+        }
+        
+        // Update state and cache
+        setPredictions(allPredictions);
+        setCachedData('predictions', allPredictions);
+        lastPredictionsFetchTime.current = now;
+      } catch (error) {
+        console.error('Error fetching predictions:', error);
+        
+        // If network error, fall back to mock data in development
+        if (process.env.NODE_ENV === 'development' && 
+            (error instanceof Error && 
+             (error.message.includes('Failed to fetch') || 
+              error.message.includes('ERR_NAME_NOT_RESOLVED')))) {
+          console.log('Network error in development, falling back to mock data');
+          const mockPredictions = generateMockPredictions(15);
+          setPredictions(mockPredictions);
+          setCachedData('predictions', mockPredictions);
+          lastPredictionsFetchTime.current = now;
+          return;
+        }
+        
+        setError(error instanceof Error ? error : new Error('Failed to fetch predictions'));
       }
     } catch (error) {
-      console.error("Error fetching predictions:", error);
-      setError(error instanceof Error ? error : new Error(String(error)));
-      
-      // Use mock data as fallback
-      notifyMockDataUsed("Prediction Market");
-      const { mockPredictions } = await import("@/utils/prediction-market-test-utils");
-      setPredictions(mockPredictions);
+      console.error('Error in fetchPredictions:', error);
+      setError(error instanceof Error ? error : new Error('Failed to fetch predictions'));
     } finally {
       setIsLoading(false);
+      isFetchingPredictions.current = false;
     }
-  }, [callMethod, clearError, notifyMockDataUsed]);
-
-  // Helper function to format bet data from contract
-  const formatBetData = useCallback((betData: BetData, prediction: ContractPrediction): UserBet => {
-    return {
-      id: `bet-${prediction.id}-${address}`,
-      predictionId: `pred-${prediction.id}`,
-      prediction: {
-        title: prediction.title,
-        options: Array.isArray(prediction.options) 
-          ? prediction.options.map((opt, idx) => ({ id: idx, text: opt }))
-          : [],
-        resolvedOption: Number(prediction.resolvedOption)
-      },
-      optionId: Number(betData.optionId),
-      amount: betData.amount.toString(),
-      createdAt: safeTimestampToISOString(betData.createdAt) || new Date().toISOString(),
-      claimed: betData.claimed
-    };
-  }, [address]);
+  }, [chainSelector, fetchPredictionOptions, getPublicClient, clearError]);
 
   // Fetch user bets
-  const fetchUserBets = useCallback(async (forceRefresh = false) => {
+  const fetchUserBets = useCallback(async (forceRefresh = false): Promise<void> => {
+    // Skip if not connected
     if (!isConnected || !address) {
       setUserBets([]);
       return;
     }
     
+    // Prevent multiple simultaneous calls
+    if (isFetchingUserBets.current) {
+      return;
+    }
+    
+    // Check if we should refresh based on time elapsed since last fetch
+    const now = Date.now();
+    if (!forceRefresh && now - lastUserBetsFetchTime.current < MIN_REFRESH_INTERVAL) {
+      return;
+    }
+    
     try {
-      clearError();
+      isFetchingUserBets.current = true;
       
-      // Check if we should use mock data
-      if (shouldUseMockData()) {
-        const mockData = await simulateGetUserBets(address);
-        setUserBets(mockData);
-        notifyMockDataUsed("user bets");
-        return;
+      // Check cache first if not forcing refresh
+      const cacheKey = `userBets-${address}`;
+      if (!forceRefresh) {
+        const cachedBets = getCachedData<UserBet[]>(cacheKey);
+        if (cachedBets) {
+          setUserBets(cachedBets);
+          isFetchingUserBets.current = false;
+          return;
+        }
       }
       
-      // Use fetchWithCache to get user bets with caching
-      const result = await fetchWithCache<UserBet[]>(
-        async () => {
-          // First, get all predictions
-          const predictionsResult = await callMethod(
-            "getPredictions",
-            [0, 1000], // Get a large number of predictions (fromIndex, limit)
-            "0",
-            chainSelector.getPredictionMarketAddress()
-          ) as CallMethodResult;
-          
-          if (!predictionsResult.success || !Array.isArray(predictionsResult.data)) {
-            throw new Error("Failed to fetch predictions");
-          }
-          
-          const allPredictions = predictionsResult.data as ContractPrediction[];
-          const userBetsPromises: Promise<UserBet | null>[] = [];
-          
-          // For each prediction, check if the user has placed a bet
-          for (const prediction of allPredictions) {
-            userBetsPromises.push(
-              (async () => {
-                try {
-                  // Call getBet for each prediction to check if the user has a bet
-                  const betResult = await callMethod(
-                    "getBet",
-                    [prediction.id, address],
-                    "0",
-                    chainSelector.getPredictionMarketAddress()
-                  ) as CallMethodResult;
-                  
-                  // If the bet exists and has a non-zero amount, format it as a UserBet
-                  if (betResult.success && betResult.data && 
-                      typeof betResult.data === 'object' && 
-                      'amount' in betResult.data && 
-                      betResult.data.amount && 
-                      betResult.data.amount !== '0') {
-                    
-                    // Properly type the bet data
-                    const betData = betResult.data as BetData;
-                    return formatBetData(betData, prediction);
-                  }
-                  
-                  return null;
-                } catch (error) {
-                  console.error(`Error fetching bet for prediction ${prediction.id}:`, error);
-                  return null;
-                }
-              })()
-            );
-          }
-          
-          // Wait for all bet queries to complete and filter out null results
-          const bets = (await Promise.all(userBetsPromises)).filter(bet => bet !== null) as UserBet[];
-          return bets;
-        },
-        {
-          cacheKey: `userBets-${address}`,
-          cacheTtl: 30000, // 30 seconds
-          cacheEnabled: !forceRefresh, // Skip cache if forceRefresh is true
-          errorMessage: ErrorMessages.FETCH_USER_BETS,
-          fallbackData: [], // Return empty array as fallback
-          throwOnError: false, // Don't throw errors
-          showErrorToast: true // Show error toast
-        }
-      );
-      
-      setUserBets(result);
-    } catch (error) {
-      handleContractError(error, ErrorMessages.FETCH_USER_BETS);
-      setError(error as Error);
+      // For now, we'll return an empty array
+      // This will be replaced with actual implementation later
       setUserBets([]);
+      setCachedData(cacheKey, []);
+      lastUserBetsFetchTime.current = now;
+    } catch (error) {
+      console.error('Error fetching user bets:', error);
+    } finally {
+      isFetchingUserBets.current = false;
     }
-  }, [isConnected, address, callMethod, clearError, notifyMockDataUsed, shouldUseMockData, formatBetData]);
+  }, [isConnected, address]);
 
   // Create a new prediction
   const createPrediction = useCallback(async (
     title: string,
     description: string,
     options: string[],
-    stake: string
-  ): Promise<boolean> => {
+    stake: number
+  ): Promise<CallMethodResult> => {
     try {
       setIsCreatingPrediction(true);
       clearError();
       
-      // Show loading toast for better UX
-      const result = await showLoadingToast(
-        callMethod(
-          "createPrediction",
-          [title, description, options],
-          stake,
-          chainSelector.getPredictionMarketAddress()
-        ) as Promise<CallMethodResult>,
-        {
-          loading: "Creating prediction...",
-          success: SuccessMessages.CREATE_PREDICTION,
-          error: ErrorMessages.CREATE_PREDICTION
-        }
+      // Show loading toast
+      const toastId = showLoadingToast('Creating prediction...');
+      
+      // Call contract method
+      const result = await callMethod(
+        'createPrediction',
+        [title, description, options],
+        parseEther(stake.toString()).toString()
       );
       
+      // Handle result
       if (result.success) {
-        await fetchPredictions(true); // Force refresh predictions
-        return true;
+        // Clear cache to force refresh
+        clearCacheEntry('predictions');
+        
+        // Show success toast
+        toast.success('Prediction created successfully');
+        
+        // Refresh predictions
+        fetchPredictions(true).catch(console.error);
       } else {
-        handleContractError(
-          new Error(result.status || "Unknown error"), 
-          ErrorMessages.CREATE_PREDICTION,
-          async () => { await createPrediction(title, description, options, stake); }
-        );
-        return false;
+        // Show error toast
+        toast.error(result.errorMessage || 'Failed to create prediction');
       }
+      
+      // Dismiss loading toast
+      toast.dismiss(toastId);
+      
+      return result;
     } catch (error) {
-      console.error("Error creating prediction:", error);
-      setError(error instanceof Error ? error : new Error(String(error)));
-      handleContractError(error, ErrorMessages.CREATE_PREDICTION);
-      return false;
+      console.error('Error creating prediction:', error);
+      setError(error instanceof Error ? error : new Error('Failed to create prediction'));
+      
+      // Show error toast
+      toast.error('Failed to create prediction');
+      
+      return {
+        success: false,
+        hash: '',
+        status: 'failed',
+        errorMessage: error instanceof Error ? error.message : String(error)
+      };
     } finally {
       setIsCreatingPrediction(false);
     }
-  }, [callMethod, fetchPredictions, clearError]);
+  }, [callMethod, clearError, fetchPredictions]);
 
-  // Place a bet on a prediction
+  // Place a bet
   const placeBet = useCallback(async (
     predictionId: number,
     optionId: number,
@@ -378,44 +513,56 @@ export function usePredictionMarket(): UsePredictionMarketReturn {
       setIsPlacingBet(true);
       clearError();
       
-      // Show loading toast for better UX
-      const result = await showLoadingToast(
-        callMethod(
-          "placeBet",
-          [predictionId, optionId],
-          amount,
-          chainSelector.getPredictionMarketAddress()
-        ) as Promise<CallMethodResult>,
-        {
-          loading: "Placing bet...",
-          success: SuccessMessages.PLACE_BET,
-          error: ErrorMessages.PLACE_BET
-        }
+      // Show loading toast
+      const toastId = showLoadingToast('Placing bet...');
+      
+      // Call contract method
+      const result = await callMethod(
+        'placeBet',
+        [BigInt(predictionId), optionId],
+        parseEther(amount).toString()
       );
       
+      // Handle result
       if (result.success) {
-        await Promise.all([
-          fetchPredictions(true), // Force refresh predictions
-          fetchUserBets(true)     // Force refresh user bets
-        ]);
+        // Clear cache to force refresh
+        clearCacheEntry('predictions');
+        clearCacheEntry(`userBets-${address}`);
+        
+        // Show success toast
+        toast.success('Bet placed successfully');
+        
+        // Refresh data
+        Promise.all([
+          fetchPredictions(true),
+          fetchUserBets(true)
+        ]).catch(console.error);
+        
+        // Dismiss loading toast
+        toast.dismiss(toastId);
+        
         return true;
       } else {
-        handleContractError(
-          new Error(result.status || "Unknown error"), 
-          ErrorMessages.PLACE_BET,
-          async () => { await placeBet(predictionId, optionId, amount); }
-        );
+        // Show error toast
+        toast.error(result.errorMessage || 'Failed to place bet');
+        
+        // Dismiss loading toast
+        toast.dismiss(toastId);
+        
         return false;
       }
     } catch (error) {
-      console.error("Error placing bet:", error);
-      setError(error instanceof Error ? error : new Error(String(error)));
-      handleContractError(error, ErrorMessages.PLACE_BET);
+      console.error('Error placing bet:', error);
+      setError(error instanceof Error ? error : new Error('Failed to place bet'));
+      
+      // Show error toast
+      toast.error('Failed to place bet');
+      
       return false;
     } finally {
       setIsPlacingBet(false);
     }
-  }, [callMethod, fetchPredictions, fetchUserBets, clearError]);
+  }, [address, callMethod, clearError, fetchPredictions, fetchUserBets]);
 
   // Resolve a prediction
   const resolvePrediction = useCallback(async (
@@ -426,43 +573,53 @@ export function usePredictionMarket(): UsePredictionMarketReturn {
       setIsResolvingPrediction(true);
       clearError();
       
-      // Show loading toast for better UX
-      const result = await showLoadingToast(
-        callMethod(
-          "resolvePrediction",
-          [predictionId, winningOptionId],
-          "0",
-          chainSelector.getPredictionMarketAddress()
-        ) as Promise<CallMethodResult>,
-        {
-          loading: "Resolving prediction...",
-          success: SuccessMessages.RESOLVE_PREDICTION,
-          error: ErrorMessages.RESOLVE_PREDICTION
-        }
+      // Show loading toast
+      const toastId = showLoadingToast('Resolving prediction...');
+      
+      // Call contract method
+      const result = await callMethod(
+        'resolvePrediction',
+        [BigInt(predictionId), winningOptionId]
       );
       
+      // Handle result
       if (result.success) {
-        await fetchPredictions(true); // Force refresh predictions
+        // Clear cache to force refresh
+        clearCacheEntry('predictions');
+        
+        // Show success toast
+        toast.success('Prediction resolved successfully');
+        
+        // Refresh predictions
+        fetchPredictions(true).catch(console.error);
+        
+        // Dismiss loading toast
+        toast.dismiss(toastId);
+        
         return true;
       } else {
-        handleContractError(
-          new Error(result.status || "Unknown error"), 
-          ErrorMessages.RESOLVE_PREDICTION,
-          async () => { await resolvePrediction(predictionId, winningOptionId); }
-        );
+        // Show error toast
+        toast.error(result.errorMessage || 'Failed to resolve prediction');
+        
+        // Dismiss loading toast
+        toast.dismiss(toastId);
+        
         return false;
       }
     } catch (error) {
-      console.error("Error resolving prediction:", error);
-      setError(error instanceof Error ? error : new Error(String(error)));
-      handleContractError(error, ErrorMessages.RESOLVE_PREDICTION);
+      console.error('Error resolving prediction:', error);
+      setError(error instanceof Error ? error : new Error('Failed to resolve prediction'));
+      
+      // Show error toast
+      toast.error('Failed to resolve prediction');
+      
       return false;
     } finally {
       setIsResolvingPrediction(false);
     }
-  }, [callMethod, fetchPredictions, clearError]);
+  }, [callMethod, clearError, fetchPredictions]);
 
-  // Claim winnings from a resolved prediction
+  // Claim winnings
   const claimWinnings = useCallback(async (
     predictionId: number
   ): Promise<boolean> => {
@@ -470,50 +627,53 @@ export function usePredictionMarket(): UsePredictionMarketReturn {
       setIsClaimingWinnings(true);
       clearError();
       
-      // Show loading toast for better UX
-      const result = await showLoadingToast(
-        callMethod(
-          "claimWinnings",
-          [predictionId],
-          "0",
-          chainSelector.getPredictionMarketAddress()
-        ) as Promise<CallMethodResult>,
-        {
-          loading: "Claiming winnings...",
-          success: SuccessMessages.CLAIM_WINNINGS,
-          error: ErrorMessages.CLAIM_WINNINGS
-        }
+      // Show loading toast
+      const toastId = showLoadingToast('Claiming winnings...');
+      
+      // Call contract method
+      const result = await callMethod(
+        'claimWinnings',
+        [BigInt(predictionId)]
       );
       
+      // Handle result
       if (result.success) {
-        await fetchUserBets(true); // Force refresh user bets
+        // Clear cache to force refresh
+        clearCacheEntry(`userBets-${address}`);
+        
+        // Show success toast
+        toast.success(SuccessMessages.WINNINGS_CLAIMED);
+        
+        // Refresh user bets
+        await fetchUserBets(true);
+        
+        // Dismiss loading toast
+        toast.dismiss(toastId);
+        
         return true;
       } else {
-        handleContractError(
-          new Error(result.status || "Unknown error"), 
-          ErrorMessages.CLAIM_WINNINGS,
-          async () => { await claimWinnings(predictionId); }
-        );
+        // Show error toast
+        toast.error(result.errorMessage || ErrorMessages.WINNINGS_CLAIM_FAILED);
+        
+        // Dismiss loading toast
+        toast.dismiss(toastId);
+        
         return false;
       }
     } catch (error) {
-      console.error("Error claiming winnings:", error);
-      setError(error instanceof Error ? error : new Error(String(error)));
-      handleContractError(error, ErrorMessages.CLAIM_WINNINGS);
+      console.error('Error claiming winnings:', error);
+      setError(error instanceof Error ? error : new Error('Failed to claim winnings'));
+      
+      // Show error toast
+      toast.error(ErrorMessages.WINNINGS_CLAIM_FAILED);
+      
       return false;
     } finally {
       setIsClaimingWinnings(false);
     }
-  }, [callMethod, fetchUserBets, clearError]);
+  }, [address, callMethod, clearError, fetchUserBets]);
 
-  // Load initial data
-  useEffect(() => {
-    fetchPredictions();
-    if (isConnected) {
-      fetchUserBets();
-    }
-  }, [fetchPredictions, fetchUserBets, isConnected]);
-
+  // Return the hook interface
   return {
     predictions,
     userBets,
@@ -529,6 +689,6 @@ export function usePredictionMarket(): UsePredictionMarketReturn {
     placeBet,
     resolvePrediction,
     claimWinnings,
-    clearError,
+    clearError
   };
 }

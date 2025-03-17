@@ -237,15 +237,24 @@ export function showSuccess(message: string): void {
 
 /**
  * Show a loading toast that will be updated with success or error
+ * or just a simple loading toast with a message
  */
 export function showLoadingToast<T>(
-  promise: Promise<T>,
-  messages: {
+  promiseOrMessage: Promise<T> | string,
+  messages?: {
     loading: string;
     success: string;
     error: string;
   }
-): Promise<T> {
-  // Cast the result to Promise<T> to satisfy TypeScript
-  return toast.promise(promise, messages) as unknown as Promise<T>;
+): Promise<T> | string | number {
+  if (typeof promiseOrMessage === 'string') {
+    // If the first argument is a string, show a simple loading toast
+    return toast.loading(promiseOrMessage);
+  } else if (messages) {
+    // If the first argument is a promise and messages are provided, show a promise toast
+    return toast.promise(promiseOrMessage, messages) as unknown as Promise<T>;
+  } else {
+    // Default case: just return the promise
+    return promiseOrMessage;
+  }
 } 
