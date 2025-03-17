@@ -40,9 +40,9 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
   const { isConnected, signIn } = useWallet();
   const { createBattle, createRaid, mintDailyNFT, checkNFTEligibility } = useGame();
   const [difficultyLevel, setDifficultyLevel] = useState<DifficultyLevel>(DifficultyLevel.MEDIUM);
-  const [aiProvider, setAIProvider] = useState<AIProviderType>(AIProviderType.ZEREPY);
+  const [aiProvider, setAIProvider] = useState<AIProviderType>(AIProviderType.GEMINI);
   const [timeLimit, setTimeLimit] = useState<number>(300); // 5 minutes default
-  const [stakeAmount, setStakeAmount] = useState<string>("0.1"); // Default stake amount
+  const [stakeAmount, setStakeAmount] = useState<string>("0.001"); // Minimal default stake amount
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [systemInstructions, setSystemInstructions] = useState<string>("");
@@ -128,16 +128,16 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
   
   // Get difficulty options
   const difficultyOptions = [
-    { value: DifficultyLevel.EASY, label: "Easy", reward: "Demo tCORE", fee: "1 tCORE" },
-    { value: DifficultyLevel.MEDIUM, label: "Medium", reward: "Demo tCORE", fee: "2 tCORE" },
-    { value: DifficultyLevel.HARD, label: "Hard", reward: "Demo tCORE", fee: "5 tCORE" },
-    { value: DifficultyLevel.EXPERT, label: "Expert", reward: "Demo tCORE", fee: "10 tCORE" }
+    { value: DifficultyLevel.EASY, label: "Easy", reward: "Demo tCORE", fee: "0.001 tCORE" },
+    { value: DifficultyLevel.MEDIUM, label: "Medium", reward: "Demo tCORE", fee: "0.005 tCORE" },
+    { value: DifficultyLevel.HARD, label: "Hard", reward: "Demo tCORE", fee: "0.01 tCORE" },
+    { value: DifficultyLevel.EXPERT, label: "Expert", reward: "Demo tCORE", fee: "0.02 tCORE" }
   ];
   
-  // Get AI provider options
+  // Get AI provider options - Put Gemini first
   const providerOptions = [
-    { value: AIProviderType.ZEREPY, label: "ZerePy AI" },
-    { value: AIProviderType.GEMINI, label: "Gemini AI" }
+    { value: AIProviderType.GEMINI, label: "Gemini AI" },
+    { value: AIProviderType.ZEREPY, label: "ZerePy AI" }
   ];
   
   // Get time limit options
@@ -353,7 +353,7 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
               value={stakeAmount}
               onChange={(e) => setStakeAmount(e.target.value)}
               min="0"
-              step="0.01"
+              step="0.001"
               placeholder="Enter stake amount"
             />
             <p className="text-xs text-muted-foreground mt-1">
@@ -417,14 +417,14 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
           <div className="flex justify-between bg-card p-3 rounded-md">
             <span>Entry Fee:</span>
             <span className="font-medium">
-              {difficultyOptions.find(o => o.value === difficultyLevel)?.fee || "2 tCORE"}
+              {difficultyOptions.find(o => o.value === difficultyLevel)?.fee || "0.005 tCORE"}
             </span>
           </div>
           
           <div className="flex justify-between bg-card p-3 rounded-md">
             <span>Potential Reward:</span>
             <span className="font-medium">
-              {difficultyOptions.find(o => o.value === difficultyLevel)?.reward || "10 tCORE"}
+              {difficultyOptions.find(o => o.value === difficultyLevel)?.reward || "0.01 tCORE"}
             </span>
           </div>
         </div>

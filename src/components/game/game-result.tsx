@@ -71,6 +71,33 @@ export function GameResult({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Format battleId for contract interaction
+  const formatBattleId = (sessionId: string): string => {
+    try {
+      // For testing, log the full session ID to understand its format
+      console.log(`Formatting session ID: ${sessionId}`);
+      
+      // The contract expects a uint64 (0 to 2^64-1)
+      // Extract just numeric parts from the session ID
+      const numericPart = sessionId.replace(/\D/g, '');
+      
+      if (!numericPart) {
+        console.error('No numeric part found in sessionId');
+        return '0'; // Return a safe default
+      }
+      
+      // If the numeric part is too long for uint64, take the first 10 digits
+      if (numericPart.length > 10) {
+        return numericPart.substring(0, 10);
+      }
+      
+      return numericPart;
+    } catch (error) {
+      console.error('Error formatting battleId:', error);
+      return '0'; // Return a safe default if parsing fails
+    }
+  };
+
   // Handle claiming reward
   const handleClaimReward = async () => {
     if (!isConnected || !result.gameSessionId || isClaiming) return;
@@ -78,10 +105,49 @@ export function GameResult({
     try {
       setIsClaiming(true);
       
-      // Call contract to claim reward
+      // Log the original details for debugging
+      console.log(`Original gameSessionId: ${result.gameSessionId}`);
+      console.log(`Full result object:`, JSON.stringify(result, null, 2));
+      
+      // Get the battleId - use contractId if it exists, otherwise try to parse from gameSessionId
+      let battleId;
+      
+      // The result should have a contractId field that contains the actual blockchain battle ID
+      if (result.contractId) {
+        console.log(`Using contractId: ${result.contractId}`);
+        battleId = result.contractId;
+        
+        // Ensure the contractId is numeric for the blockchain
+        if (!/^\d+$/.test(battleId)) {
+          console.log(`contractId is not purely numeric, extracting numbers...`);
+          const numericPart = battleId.replace(/\D/g, '');
+          if (numericPart) {
+            battleId = numericPart;
+          }
+        }
+      } else {
+        // Fallback to parsing the gameSessionId
+        console.log(`No contractId found, parsing from gameSessionId`);
+        battleId = formatBattleId(result.gameSessionId);
+      }
+      
+      // Ensure battleId is a valid number
+      if (!battleId || battleId === '0' || !/^\d+$/.test(battleId)) {
+        console.error(`Invalid battleId: ${battleId}`);
+        toast({
+          title: "Cannot Claim Reward",
+          description: "Invalid battle ID. Please contact support.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      console.log(`Attempting to resolve battle with ID: ${battleId}, success: true`);
+      
+      // Use resolveBattle with success=true to claim the reward
       const txResult = await callMethod(
-        "claimReward",
-        [result.gameSessionId],
+        "resolveBattle",
+        [battleId, true], // Pass battleId and success=true
         "0",
         chainSelector.getGameModesAddress()
       );
@@ -101,11 +167,30 @@ export function GameResult({
       }
     } catch (error) {
       console.error("Error claiming reward:", error);
-      toast({
-        title: "Claim Failed",
-        description: "An error occurred while claiming your reward.",
-        variant: "destructive",
-      });
+      
+      // Get more information about the error
+      if (error && typeof error === 'object' && 'message' in error) {
+        const errorMessage = (error as Error).message;
+        if (errorMessage.includes('Battle not found')) {
+          toast({
+            title: "Claim Failed",
+            description: "Battle not found on the blockchain. The session may have expired or not been properly recorded.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Claim Failed",
+            description: `Error: ${errorMessage}`,
+            variant: "destructive",
+          });
+        }
+      } else {
+        toast({
+          title: "Claim Failed",
+          description: "An error occurred while claiming your reward.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsClaiming(false);
     }

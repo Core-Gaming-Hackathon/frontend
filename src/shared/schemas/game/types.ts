@@ -35,6 +35,7 @@ export interface GameAttemptResult {
   maxAttempts: number;
   timeElapsed: number;
   gameSessionId?: string;
+  contractId?: string;
 }
 
 /**
