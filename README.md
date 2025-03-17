@@ -87,12 +87,5 @@ The platform leverages Core blockchain for:
 - **Token Staking**: All games require CORE token stakes
 - **Prediction Markets**: Betting on game outcomes with CORE tokens
 
-## Demo Instructions
 
-1. Connect wallet to Core Mainnet
-2. Claim daily participation NFT
-3. Select game mode and difficulty
-4. Stake CORE tokens to start a match
-5. Use strategic conversation to defeat the AI security system
-6. Claim rewards upon success
 
