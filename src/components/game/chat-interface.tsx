@@ -72,14 +72,26 @@ export function ChatInterface({
   
   // Get env mock mode directly from environment variable
   const envMockMode = process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'true';
-  // Use passed mockMode prop or environment variable as fallback
-  const [mockMode, setMockMode] = useState(propMockMode || envMockMode);
+  const isEnvMockModeDisabled = process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'false';
+  
+  // Use passed mockMode prop, but ALWAYS respect environment override when it's explicitly false
+  const [mockMode, setMockModeInternal] = useState(isEnvMockModeDisabled ? false : (propMockMode || envMockMode));
+  
+  // Custom setMockMode that respects environment settings
+  const setMockMode = (value: boolean) => {
+    if (isEnvMockModeDisabled && value === true) {
+      console.warn('[ChatInterface] Cannot enable mock mode when disabled by environment');
+      return;
+    }
+    setMockModeInternal(value);
+  };
   
   // Log mock mode configuration at startup
   useEffect(() => {
     console.log('[ChatInterface] Mock mode configuration:', {
       propMockMode,
       envMockMode,
+      isEnvMockModeDisabled,
       initialMockModeState: mockMode,
       NEXT_PUBLIC_ENABLE_MOCK_MODE: process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE
     });

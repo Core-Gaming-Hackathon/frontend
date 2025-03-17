@@ -37,9 +37,13 @@ export default function BattleModePage() {
     stakeAmount?: string;
     mockMode?: boolean;
   }) => {
-    // Use the mockMode from config, falling back to environment variable
-    const effectiveMockMode = config.mockMode ?? envMockMode;
-    console.log(`[BattleModePage] Starting game with mockMode: ${effectiveMockMode} (from config: ${config.mockMode}, env: ${envMockMode})`);
+    // Force mockMode to false when environment variable is 'false'
+    const isEnvMockModeDisabled = process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'false';
+    
+    // Override mockMode if environment forces it to be disabled
+    const effectiveMockMode = isEnvMockModeDisabled ? false : (config.mockMode ?? envMockMode);
+    
+    console.log(`[BattleModePage] Starting game with mockMode: ${effectiveMockMode} (from config: ${config.mockMode}, env: ${envMockMode}, env disabled: ${isEnvMockModeDisabled})`);
     
     setGameConfig({
       ...config,

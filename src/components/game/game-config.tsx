@@ -51,14 +51,14 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
   const isEnvMockModeForced = process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'true';
   const isEnvMockModeDisabled = process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'false';
   
-  // Use environment setting for mockMode, enforcing false when explicitly disabled
-  const [mockMode, setMockMode] = useState<boolean>(isEnvMockModeForced);
+  // Use environment setting for mockMode, ALWAYS enforcing false when explicitly disabled
+  const [mockMode, setMockMode] = useState<boolean>(isEnvMockModeDisabled ? false : isEnvMockModeForced);
   
   // Override mockMode setter to respect environment settings
   const setMockModeWithRestrictions = (value: boolean) => {
-    // Only allow enabling mock mode if not explicitly disabled by environment
-    if (isEnvMockModeDisabled && value === true) {
-      console.warn('[GameConfig] Cannot enable mock mode when disabled by environment');
+    // Never allow enabling mock mode if explicitly disabled by environment
+    if (isEnvMockModeDisabled) {
+      console.warn('[GameConfig] Cannot change mock mode when disabled by environment');
       return;
     }
     setMockMode(value);
@@ -152,8 +152,14 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
     try {
       setIsSubmitting(true);
       
+      // Ensure mockMode is false when environment says it should be
+      const effectiveMockMode = isEnvMockModeDisabled ? false : mockMode;
+      
+      // Log what's happening with mockMode
+      console.log(`[GameConfig] Starting game with mockMode=${effectiveMockMode} (from state: ${mockMode}, env disabled: ${isEnvMockModeDisabled})`);
+      
       // If not connected and not in mock mode, try to connect wallet first
-      if (!isConnected && !mockMode) {
+      if (!isConnected && !effectiveMockMode) {
         try {
           const connected = await signIn();
           if (!connected) {
@@ -170,7 +176,7 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
       }
       
       // Check NFT eligibility if connected and not in mock mode
-      if (isConnected && !mockMode) {
+      if (isConnected && !effectiveMockMode) {
         try {
           const isEligible = await checkNFTEligibility();
           if (isEligible) {
@@ -187,7 +193,7 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
       }
       
       // For non-mock mode, handle blockchain interaction
-      if (!mockMode && isConnected) {
+      if (!effectiveMockMode && isConnected) {
         let gameSession = null;
         
         // Call the appropriate contract method based on game type
@@ -210,7 +216,7 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
             aiProvider,
             timeLimit,
             stakeAmount,
-            mockMode,
+            mockMode: effectiveMockMode,
             contractGameId: gameSession.contractId,
             sessionId: gameSession.id
           });
@@ -222,7 +228,7 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
             aiProvider,
             timeLimit,
             stakeAmount,
-            mockMode: true
+            mockMode: true // This one is specifically set to true for fallback
           });
         }
       } else {
@@ -232,7 +238,7 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
           aiProvider,
           timeLimit,
           stakeAmount,
-          mockMode
+          mockMode: effectiveMockMode
         });
       }
       
