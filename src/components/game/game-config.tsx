@@ -21,10 +21,7 @@ import { Loader2 } from "lucide-react";
 import { GameModeAssets } from "@/hooks/use-game-form";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { isMockModeEnabled } from "@/utils/mock-data";
 import { useGame } from "@/providers/game-provider";
-import { Checkbox } from "@/components/ui/checkbox";
-import { GameConfig as GameConfigType } from "@/types/game";
 
 interface GameConfigProps {
   gameType: GameType;
@@ -50,9 +47,22 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [systemInstructions, setSystemInstructions] = useState<string>("");
   
-  // Read mock mode from environment, don't default to true
-  const envMockMode = process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'true';
-  const [mockMode, setMockMode] = useState(envMockMode);
+  // Determine if mock mode is forced by environment 
+  const isEnvMockModeForced = process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'true';
+  const isEnvMockModeDisabled = process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'false';
+  
+  // Use environment setting for mockMode, enforcing false when explicitly disabled
+  const [mockMode, setMockMode] = useState<boolean>(isEnvMockModeForced);
+  
+  // Override mockMode setter to respect environment settings
+  const setMockModeWithRestrictions = (value: boolean) => {
+    // Only allow enabling mock mode if not explicitly disabled by environment
+    if (isEnvMockModeDisabled && value === true) {
+      console.warn('[GameConfig] Cannot enable mock mode when disabled by environment');
+      return;
+    }
+    setMockMode(value);
+  };
   
   // Get game mode name for display
   const gameTypeName = GameType[gameType];
@@ -349,9 +359,17 @@ export function GameConfig({ gameType, onStart }: GameConfigProps) {
             <Switch
               id="mock-mode"
               checked={mockMode}
-              onCheckedChange={setMockMode}
+              onCheckedChange={setMockModeWithRestrictions}
+              disabled={process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'false'}
             />
-            <Label htmlFor="mock-mode">Mock Mode (No blockchain transactions)</Label>
+            <Label htmlFor="mock-mode">
+              Mock Mode (No blockchain transactions)
+              {process.env.NEXT_PUBLIC_ENABLE_MOCK_MODE === 'false' && (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  (Disabled by environment configuration)
+                </span>
+              )}
+            </Label>
           </div>
           
           {/* Advanced Settings Toggle */}
