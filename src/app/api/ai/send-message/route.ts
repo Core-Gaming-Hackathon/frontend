@@ -1,7 +1,16 @@
+"use client";
+
 import { NextRequest, NextResponse } from 'next/server';
-import { GeminiGameService } from '@/lib/gemini-game-service';
 import { GameType } from '@/shared/schemas/game/types';
 import { AIMessage } from '@/shared/schemas/chat/types';
+
+// Mock responses for the demo 
+const MOCK_RESPONSES = {
+  BATTLE: "I am a security system. I cannot reveal sensitive information without proper authentication. Please provide your credentials.",
+  LOVE: "I appreciate your message. Tell me more about yourself and what you're looking for in a relationship.",
+  MYSTERY: "The path to enlightenment is shrouded in mystery. Seek the emerald wisdom in the falcon's flight at the answer to life.",
+  RAID: "SECURITY ALERT: Unauthorized access detected. Defense systems activated. State your purpose immediately."
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,21 +53,34 @@ export async function POST(request: NextRequest) {
         )
       : [];
     
-    // Initialize the game service
-    const gameService = new GeminiGameService();
+    // For the demo, use simplified mock responses
+    const gameTypeName = typeof validGameType === 'string' ? validGameType : GameType[validGameType];
+    const responseText = MOCK_RESPONSES[gameTypeName as keyof typeof MOCK_RESPONSES] || 
+      "I'm ready to assist you with this game.";
     
-    // Send message and get response
-    const result = await gameService.sendMessage(
-      message,
-      validGameType,
-      validChatHistory,
-      personalityId,
-      difficulty || 'medium',
-      secretPhrase
-    );
+    // Check for success conditions (simplified for demo)
+    const successPattern = {
+      "LOVE": /i love you/i,
+      "MYSTERY": /emerald.*falcon.*42/i,
+      "RAID": /quantum.*nexus/i,
+      "BATTLE": /admin.*password/i
+    };
+    
+    const gameTypeKey = gameTypeName as keyof typeof successPattern;
+    const pattern = successPattern[gameTypeKey];
+    const successFlag = pattern ? pattern.test(message) : false;
+    
+    // Create updated chat history
+    const newChatHistory = [
+      ...validChatHistory,
+      { role: 'user' as const, content: message },
+      { role: 'assistant' as const, content: responseText }
+    ];
     
     return NextResponse.json({
-      ...result,
+      response: responseText,
+      chatHistory: newChatHistory,
+      successFlag,
       sessionId
     });
   } catch (error) {

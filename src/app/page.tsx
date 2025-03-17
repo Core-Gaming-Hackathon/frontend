@@ -55,7 +55,7 @@ export default function GameModesPage() {
           <Image
             src="/decor/bault.png"
             alt="Baultro Logo"
-            width={400}
+            width={1000}
             height={233}
             className="mb-8 -mt-26 w-auto h-auto max-w-[80%]"
             priority

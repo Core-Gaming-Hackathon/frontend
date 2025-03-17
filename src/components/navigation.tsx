@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useWallet } from "@/providers/evm-wallet-provider";
@@ -11,10 +11,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Shield } from "lucide-react";
+
+// Contract owner address - the only one who can resolve battles
+const CONTRACT_OWNER = "0x87f603924309889B39687AC0A1669b1E5a506E74";
 
 export default function Navigation() {
   const { address, isConnected, signIn, signOut } = useWallet();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Check if the connected wallet is the contract owner
+  useEffect(() => {
+    setIsAdmin(isConnected && address?.toLowerCase() === CONTRACT_OWNER.toLowerCase());
+  }, [address, isConnected]);
 
   // Function to format address for display
   const formatAddress = (addr: string) => {
@@ -72,6 +82,17 @@ export default function Navigation() {
           >
             Leaderboard
           </Link>
+          
+          {/* Admin link - only shown to the contract owner */}
+          {isAdmin && (
+            <Link
+              href="/admin/battle-admin"
+              className="text-primary hover:text-primary/80 transition-colors flex items-center"
+            >
+              <Shield className="w-4 h-4 mr-1" />
+              Admin
+            </Link>
+          )}
           
           {/* Wallet Button */}
           <Button
@@ -144,18 +165,31 @@ export default function Navigation() {
               >
                 Leaderboard
               </Link>
+              
+              {/* Admin link in mobile menu - only for contract owner */}
+              {isAdmin && (
+                <Link
+                  href="/admin/battle-admin"
+                  className="px-4 py-2 hover:bg-secondary rounded-md flex items-center text-primary"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <Shield className="w-4 h-4 mr-1" />
+                  Admin Dashboard
+                </Link>
+              )}
+              
               <Button
-  onClick={() => {
-    handleConnectWallet();
-    setIsMenuOpen(false);
-  }}
-  className="mt-2"
-  variant={isConnected ? "outline" : "default"}
->
-  {isConnected
-    ? `${formatAddress(address || "")}`
-    : "Connect Wallet"}
-</Button>
+                onClick={() => {
+                  handleConnectWallet();
+                  setIsMenuOpen(false);
+                }}
+                className="mt-2"
+                variant={isConnected ? "outline" : "default"}
+              >
+                {isConnected
+                  ? `${formatAddress(address || "")}`
+                  : "Connect Wallet"}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
